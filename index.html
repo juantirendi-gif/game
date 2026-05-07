@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halisco: Tactical Combat</title>
+    <title>Halisco: Tactical Scavenger</title>
     <style>
         :root {
             --tactical-green: #00ff41;
-            --building-gray: #444;
-            --nature-green: #2d5a27;
+            --ammo-yellow: #ffcc00;
             --ui-bg: rgba(10, 10, 10, 0.95);
         }
 
@@ -29,12 +28,10 @@
             position: relative;
             border: 2px solid #333;
             background: #000;
-            cursor: none;
         }
 
         canvas { display: block; }
 
-        /* Muzzle Flash */
         #muzzle-flash {
             position: absolute;
             top: 45%; left: 50%;
@@ -63,15 +60,15 @@
             pointer-events: none;
         }
 
-        /* Reload Message Overlay */
-        #reload-msg {
+        #hud-msg {
             position: absolute;
-            top: 60%; left: 50%;
+            top: 20%; left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             font-weight: bold;
-            display: none;
+            text-align: center;
             text-shadow: 2px 2px #000;
+            pointer-events: none;
         }
 
         #control-panel {
@@ -87,23 +84,12 @@
         }
 
         .stat-group { text-align: center; flex: 1; }
-        .label { color: #666; font-size: 0.6rem; margin-bottom: 2px; text-transform: uppercase; }
+        .label { color: #666; font-size: 0.6rem; text-transform: uppercase; }
         .value { font-size: 1rem; font-weight: bold; }
 
-        #mouse-ui { width: 50px; height: 50px; transition: transform 0.1s; }
+        #mouse-ui { width: 45px; height: 45px; }
         .mouse-body { fill: #1a1a1a; stroke: #333; }
         .active-glow { fill: var(--tactical-green); opacity: 0; }
-
-        #click-prompt {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.95);
-            padding: 40px;
-            border: 1px solid var(--tactical-green);
-            text-align: center;
-            z-index: 100;
-        }
     </style>
 </head>
 <body>
@@ -112,7 +98,7 @@
         <canvas id="gameCanvas" width="800" height="400"></canvas>
         <div id="muzzle-flash"></div>
         <div id="crosshair">⌖</div>
-        <div id="reload-msg">RELOADING...</div>
+        <div id="hud-msg"></div>
         
         <div id="weapon-wrapper">
             <svg id="weapon" viewBox="0 0 200 200">
@@ -121,12 +107,6 @@
                 <rect x="92" y="40" width="16" height="30" fill="#222" />
                 <rect x="94" y="35" width="12" height="5" fill="#00ff41" fill-opacity="0.5" />
             </svg>
-        </div>
-
-        <div id="click-prompt">
-            <h2 style="margin:0">HALISCO: VIBRANT OPS</h2>
-            <p style="color:white; font-size: 0.8rem;">V4 - BUILDINGS & NATURE LOADED</p>
-            <p>[ CLICK TO START ]</p>
         </div>
     </div>
 
@@ -137,8 +117,8 @@
                 <path id="left-click-viz" class="active-glow" d="M10,10 Q20,0 20,10 L20,25 L10,25 Z" />
             </svg>
             <div class="stat-group" style="text-align: left;">
-                <div class="label">Input</div>
-                <div class="value" style="font-size: 0.7rem;">MOUSE LINKED</div>
+                <div class="label">Hardware</div>
+                <div class="value" style="font-size: 0.65rem;">MOUSE LINKED</div>
             </div>
         </div>
 
@@ -148,13 +128,13 @@
         </div>
 
         <div class="stat-group">
-            <div class="label">Controls</div>
-            <div class="value">WASD + [R]</div>
+            <div class="label">Objective</div>
+            <div class="value" id="scavenge-count">REFILLS: 0/10</div>
         </div>
 
         <div class="stat-group" style="text-align: right;">
-            <div class="label">Environment</div>
-            <div class="value" style="color: #00ff41;">VIBRANT</div>
+            <div class="label">System</div>
+            <div class="value" style="color: #00ff41;">AUTO-START ACTIVE</div>
         </div>
     </div>
 
@@ -164,38 +144,43 @@ const ctx = canvas.getContext('2d');
 const weapon = document.getElementById('weapon');
 const flash = document.getElementById('muzzle-flash');
 const ammoDisplay = document.getElementById('ammo-count');
-const reloadMsg = document.getElementById('reload-msg');
-const prompt = document.getElementById('click-prompt');
+const scavengeDisplay = document.getElementById('scavenge-count');
+const hudMsg = document.getElementById('hud-msg');
 const leftBtnViz = document.getElementById('left-click-viz');
 
-// GAME STATE
 let ammo = 30;
+let refillsCollected = 0;
 let isReloading = false;
 let canShoot = true;
 
-// MAP LEGEND: 0=Empty, 1=Building (Gray), 2=Nature (Green/Trees)
 const worldMap = [
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,2,0,0,1,1,0,0,2,2,0,0,1,0,1],
-    [1,0,2,0,0,1,1,0,0,2,2,0,0,1,0,1],
-    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,1,1,0,0,0,2,0,0,0,1,1,0,0,1],
-    [1,0,1,1,0,0,0,2,0,0,0,1,1,0,0,1],
-    [1,0,0,0,0,2,2,2,2,2,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+    [1,0,2,2,0,0,0,0,0,2,2,0,1,1,0,1],
+    [1,0,0,0,0,1,1,0,0,0,0,0,1,1,0,1],
+    [1,0,1,0,0,0,0,0,2,2,0,0,0,0,0,1],
+    [1,0,1,0,2,2,0,0,2,2,0,0,2,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,2,0,0,1],
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
 ];
 
-const player = { x: 2, y: 2, dir: 0, speed: 0.07, mouseSens: 0.002, sway: 0 };
+// 10 Ammo Refillers
+const refills = [
+    {x: 5, y: 1.5}, {x: 14, y: 1.5}, {x: 8, y: 3.5}, {x: 2, y: 6.5},
+    {x: 10, y: 6.5}, {x: 4, y: 4.5}, {x: 14, y: 4.5}, {x: 12, y: 2.5},
+    {x: 6, y: 6.5}, {x: 1.5, y: 4.5}
+];
+
+const player = { x: 2, y: 2.5, dir: 0, speed: 0.07, mouseSens: 0.002, sway: 0 };
 const keys = {};
 
-canvas.addEventListener('mousedown', () => {
-    if (document.pointerLockElement === canvas) shoot();
-    else canvas.requestPointerLock();
-});
-
-document.addEventListener('pointerlockchange', () => {
-    prompt.style.display = document.pointerLockElement === canvas ? 'none' : 'block';
+// Auto-focus on click anywhere
+document.addEventListener('mousedown', () => {
+    if (document.pointerLockElement !== canvas) {
+        canvas.requestPointerLock();
+    } else {
+        shoot();
+    }
 });
 
 document.addEventListener('mousemove', (e) => {
@@ -204,25 +189,22 @@ document.addEventListener('mousemove', (e) => {
 
 window.addEventListener('keydown', e => {
     keys[e.code] = true;
-    if (e.code === 'KeyR') reload(); // Trigger Reload with R
+    if (e.code === 'KeyR') reload();
 });
 window.addEventListener('keyup', e => keys[e.code] = false);
 
 function reload() {
     if (isReloading || ammo === 30) return;
     isReloading = true;
-    canShoot = false;
-    reloadMsg.style.display = 'block';
-    weapon.style.transform = 'translateY(150px) rotate(-10deg)'; // Lower weapon
-    
+    hudMsg.innerText = "RELOADING...";
+    weapon.style.transform = 'translateY(150px) rotate(-10deg)';
     setTimeout(() => {
         ammo = 30;
         ammoDisplay.innerText = `${ammo} / 30`;
-        reloadMsg.style.display = 'none';
-        weapon.style.transform = 'translateY(0) rotate(0deg)';
+        hudMsg.innerText = "";
+        weapon.style.transform = 'translateY(0)';
         isReloading = false;
-        canShoot = true;
-    }, 1500); // 1.5 second reload time
+    }, 1200);
 }
 
 function shoot() {
@@ -231,4 +213,68 @@ function shoot() {
         canShoot = false;
         ammoDisplay.innerText = `${ammo} / 30`;
         flash.style.display = 'block';
-        weapon.style.transform = 'translateY(25px) scale(
+        weapon.style.transform = 'translateY(25px) scale(1.1)';
+        leftBtnViz.style.opacity = '1';
+        setTimeout(() => {
+            flash.style.display = 'none';
+            weapon.style.transform = 'translateY(0) scale(1)';
+            leftBtnViz.style.opacity = '0';
+            canShoot = true;
+        }, 100);
+    }
+}
+
+function checkRefills() {
+    refills.forEach((r, index) => {
+        let dx = player.x - r.x;
+        let dy = player.y - r.y;
+        if (Math.sqrt(dx*dx + dy*dy) < 0.4) {
+            refills.splice(index, 1);
+            refillsCollected++;
+            scavengeDisplay.innerText = `REFILLS: ${refillsCollected}/10`;
+            hudMsg.innerText = "AMMO SCAVENGED!";
+            setTimeout(() => hudMsg.innerText = "", 1000);
+            if (ammo < 15) ammo += 15; else ammo = 30;
+            ammoDisplay.innerText = `${ammo} / 30`;
+        }
+    });
+}
+
+function update() {
+    let mx = 0, my = 0, moving = false;
+    if (keys['KeyW']) { mx += Math.cos(player.dir) * player.speed; my += Math.sin(player.dir) * player.speed; moving = true; }
+    if (keys['KeyS']) { mx -= Math.cos(player.dir) * player.speed; my -= Math.sin(player.dir) * player.speed; moving = true; }
+    if (keys['KeyA']) { mx += Math.cos(player.dir - 1.57) * player.speed; my += Math.sin(player.dir - 1.57) * player.speed; moving = true; }
+    if (keys['KeyD']) { mx += Math.cos(player.dir + 1.57) * player.speed; my += Math.sin(player.dir + 1.57) * player.speed; moving = true; }
+
+    if (worldMap[Math.floor(player.y)][Math.floor(player.x + mx)] === 0) player.x += mx;
+    if (worldMap[Math.floor(player.y + my)][Math.floor(player.x)] === 0) player.y += my;
+
+    checkRefills();
+
+    if (moving && !isReloading) {
+        player.sway += 0.15;
+        weapon.parentElement.style.transform = `translateX(-50%) translateY(${Math.sin(player.sway) * 5}px)`;
+    }
+}
+
+function draw() {
+    ctx.fillStyle = "#1a3a4a"; ctx.fillRect(0,0,canvas.width, 200);
+    ctx.fillStyle = "#222"; ctx.fillRect(0,200,canvas.width, 200);
+
+    const fov = 1.1;
+    for (let i = 0; i < canvas.width; i++) {
+        let rayA = (player.dir - fov/2) + (i / canvas.width) * fov;
+        let dist = 0, hit = 0;
+        let cosA = Math.cos(rayA), sinA = Math.sin(rayA);
+
+        while (hit === 0 && dist < 15) {
+            dist += 0.05;
+            let tx = Math.floor(player.x + cosA * dist);
+            let ty = Math.floor(player.y + sinA * dist);
+            
+            // Check Walls
+            if (worldMap[ty] && worldMap[ty][tx] > 0) hit = worldMap[ty][tx];
+            
+            // Render Refills (Yellow thin pillars)
+            refills.
