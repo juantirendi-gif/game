@@ -277,4 +277,28 @@ function draw() {
             if (worldMap[ty] && worldMap[ty][tx] > 0) hit = worldMap[ty][tx];
             
             // Render Refills (Yellow thin pillars)
-            refills.
+            refills.forEach(r => {
+                if (Math.floor(player.x + cosA * dist) === Math.floor(r.x) && 
+                    Math.floor(player.y + sinA * dist) === Math.floor(r.y)) {
+                    hit = 3;
+                }
+            });
+        }
+
+        let h = canvas.height / (dist * Math.cos(rayA - player.dir));
+        let b = Math.max(0, 180 - (dist * 12));
+
+        if (hit === 1) ctx.strokeStyle = `rgb(${b}, ${b}, ${b})`; 
+        else if (hit === 2) ctx.strokeStyle = `rgb(0, ${b}, 0)`; 
+        else if (hit === 3) ctx.strokeStyle = `rgb(${b}, ${b}, 0)`; // Yellow for Refillers
+        else ctx.strokeStyle = "#000";
+
+        ctx.beginPath(); ctx.moveTo(i, 200 - h/2); ctx.lineTo(i, 200 + h/2); ctx.stroke();
+    }
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>
