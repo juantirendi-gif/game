@@ -3,17 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halisco: Mouse-Aim Prototype</title>
+    <title>Halisco: Tactical Combat</title>
     <style>
+        :root {
+            --tactical-green: #00ff41;
+            --ui-bg: rgba(10, 10, 10, 0.95);
+        }
+
         body {
             margin: 0;
-            background-color: #050505;
+            background-color: #000;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
-            color: #00ff41;
+            color: var(--tactical-green);
             font-family: 'Courier New', Courier, monospace;
             overflow: hidden;
         }
@@ -22,17 +27,31 @@
             position: relative;
             border: 2px solid #333;
             background: #000;
+            cursor: none; /* Hide real mouse to use crosshair */
         }
 
         canvas { display: block; }
 
-        /* The Gun Sprite */
-        #weapon {
+        /* Muzzle Flash */
+        #muzzle-flash {
             position: absolute;
-            bottom: -10px;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(0,255,65,0.5) 40%, transparent 70%);
+            display: none;
+            z-index: 5;
+        }
+
+        /* Gun Graphics */
+        #weapon-wrapper {
+            position: absolute;
+            bottom: -20px;
             left: 50%;
             transform: translateX(-50%);
-            width: 280px;
+            width: 320px;
             pointer-events: none;
             z-index: 10;
         }
@@ -42,21 +61,39 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            color: #00ff41;
-            font-size: 24px;
+            color: var(--tactical-green);
+            font-size: 28px;
             pointer-events: none;
-            text-shadow: 0 0 5px #000;
+            text-shadow: 0 0 8px #000;
         }
 
-        #instructions {
+        /* Bottom Control Panel */
+        #control-panel {
+            width: 800px;
+            background: var(--ui-bg);
+            border: 2px solid #333;
+            border-top: none;
+            display: flex;
+            justify-content: space-around;
+            padding: 15px 0;
+            font-size: 0.8rem;
+            box-sizing: border-box;
+        }
+
+        .stat-group { text-align: center; }
+        .label { color: #888; font-size: 0.6rem; margin-bottom: 5px; text-transform: uppercase; }
+        .value { font-size: 1.2rem; font-weight: bold; }
+
+        #click-prompt {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.8);
-            padding: 20px;
+            background: rgba(0,0,0,0.9);
+            padding: 30px;
+            border: 1px solid var(--tactical-green);
             text-align: center;
-            border: 1px solid #00ff41;
+            z-index: 100;
             cursor: pointer;
         }
     </style>
@@ -64,18 +101,45 @@
 <body>
 
     <div id="game-container">
-        <canvas id="gameCanvas" width="800" height="450"></canvas>
-        <div id="crosshair">+</div>
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div id="muzzle-flash"></div>
+        <div id="crosshair">⌖</div>
         
-        <svg id="weapon" viewBox="0 0 200 200">
-            <rect x="85" y="100" width="30" height="100" fill="#151515" />
-            <rect x="90" y="70" width="20" height="80" fill="#222" />
-            <rect x="94" y="65" width="12" height="10" fill="#00ff41" fill-opacity="0.2" />
-        </svg>
+        <div id="weapon-wrapper">
+            <svg id="weapon" viewBox="0 0 200 200">
+                <rect x="80" y="80" width="40" height="120" fill="#111" />
+                <rect x="85" y="60" width="30" height="40" fill="#1a1a1a" />
+                <rect x="92" y="40" width="16" height="30" fill="#333" />
+            </svg>
+        </div>
 
-        <div id="instructions">
-            CLICK TO START TACTICAL OPS<br>
-            (WASD to Move | Mouse to Aim)
+        <div id="click-prompt">
+            <h1 style="margin:0">HALISCO</h1>
+            <p>TACTICAL PROTOTYPE V3</p>
+            <p style="color:white">[ CLICK TO DEPLOY ]</p>
+        </div>
+    </div>
+
+    <div id="control-panel">
+        <div class="stat-group">
+            <div class="label">Movement</div>
+            <div class="value">W A S D</div>
+        </div>
+        <div class="stat-group">
+            <div class="label">Combat</div>
+            <div class="value">L-CLICK: SHOOT</div>
+        </div>
+        <div class="stat-group">
+            <div class="label">Aiming</div>
+            <div class="value">MOUSE: ROTATE</div>
+        </div>
+        <div class="stat-group">
+            <div class="label">Ammo</div>
+            <div class="value" id="ammo-count">30 / 30</div>
+        </div>
+        <div class="stat-group">
+            <div class="label">Status</div>
+            <div class="value" style="color: #00ff41;">READY</div>
         </div>
     </div>
 
@@ -83,114 +147,108 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const weapon = document.getElementById('weapon');
-const instructions = document.getElementById('instructions');
+const flash = document.getElementById('muzzle-flash');
+const ammoDisplay = document.getElementById('ammo-count');
+const prompt = document.getElementById('click-prompt');
+
+let ammo = 30;
+let canShoot = true;
 
 const worldMap = [
     [1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,1,0,0,0,0,0,1],
+    [1,0,1,1,0,1,0,1,1,1,0,1],
     [1,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,1,0,0,1,1,1,0,0,0,1],
-    [1,0,1,0,0,0,0,0,0,1,0,1],
-    [1,0,0,0,0,0,0,0,0,1,0,1],
-    [1,0,0,0,1,1,1,0,0,0,0,1],
-    [1,0,1,0,1,0,1,0,1,0,0,1],
+    [1,1,1,0,1,1,1,1,0,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,1,0,1],
     [1,0,0,0,0,0,0,0,0,0,0,1],
     [1,1,1,1,1,1,1,1,1,1,1,1]
 ];
 
 const player = {
-    x: 2, y: 2, dir: 0,
-    speed: 0.07, 
-    mouseSensitivity: 0.002,
-    stepCount: 0
+    x: 1.5, y: 1.5, dir: 0,
+    speed: 0.06, 
+    mouseSens: 0.0025,
+    sway: 0
 };
 
 const keys = {};
 
-// Mouse Lock Logic
-canvas.addEventListener('click', () => {
-    canvas.requestPointerLock();
+canvas.addEventListener('mousedown', () => {
+    if (document.pointerLockElement === canvas) shoot();
+    else canvas.requestPointerLock();
 });
 
 document.addEventListener('pointerlockchange', () => {
-    if (document.pointerLockElement === canvas) {
-        instructions.style.display = 'none';
-    } else {
-        instructions.style.display = 'block';
-    }
+    prompt.style.display = document.pointerLockElement === canvas ? 'none' : 'block';
 });
 
-// Mouse Movement for Rotation
 document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === canvas) {
-        player.dir += e.movementX * player.mouseSensitivity;
+        player.dir += e.movementX * player.mouseSens;
     }
 });
 
 window.addEventListener('keydown', e => keys[e.code] = true);
 window.addEventListener('keyup', e => keys[e.code] = false);
 
+function shoot() {
+    if (ammo > 0 && canShoot) {
+        ammo--;
+        canShoot = false;
+        ammoDisplay.innerText = `${ammo} / 30`;
+
+        // Visual FX
+        flash.style.display = 'block';
+        weapon.style.transform = 'translateY(30px) scale(1.1)';
+        
+        setTimeout(() => {
+            flash.style.display = 'none';
+            weapon.style.transform = 'translateY(0) scale(1)';
+            canShoot = true;
+        }, 100);
+    }
+}
+
 function update() {
-    let moveX = 0;
-    let moveY = 0;
-    let isMoving = false;
+    let mx = 0, my = 0;
+    let moving = false;
 
-    if (keys['KeyW']) {
-        moveX += Math.cos(player.dir) * player.speed;
-        moveY += Math.sin(player.dir) * player.speed;
-        isMoving = true;
-    }
-    if (keys['KeyS']) {
-        moveX -= Math.cos(player.dir) * player.speed;
-        moveY -= Math.sin(player.dir) * player.speed;
-        isMoving = true;
-    }
-    if (keys['KeyA']) {
-        moveX += Math.cos(player.dir - Math.PI/2) * player.speed;
-        moveY += Math.sin(player.dir - Math.PI/2) * player.speed;
-        isMoving = true;
-    }
-    if (keys['KeyD']) {
-        moveX += Math.cos(player.dir + Math.PI/2) * player.speed;
-        moveY += Math.sin(player.dir + Math.PI/2) * player.speed;
-        isMoving = true;
-    }
+    if (keys['KeyW']) { mx += Math.cos(player.dir) * player.speed; my += Math.sin(player.dir) * player.speed; moving = true; }
+    if (keys['KeyS']) { mx -= Math.cos(player.dir) * player.speed; my -= Math.sin(player.dir) * player.speed; moving = true; }
+    if (keys['KeyA']) { mx += Math.cos(player.dir - 1.57) * player.speed; my += Math.sin(player.dir - 1.57) * player.speed; moving = true; }
+    if (keys['KeyD']) { mx += Math.cos(player.dir + 1.57) * player.speed; my += Math.sin(player.dir + 1.57) * player.speed; moving = true; }
 
-    // Collision check
-    if (worldMap[Math.floor(player.y)][Math.floor(player.x + moveX)] === 0) player.x += moveX;
-    if (worldMap[Math.floor(player.y + moveY)][Math.floor(player.x)] === 0) player.y += moveY;
+    if (worldMap[Math.floor(player.y)][Math.floor(player.x + mx)] === 0) player.x += mx;
+    if (worldMap[Math.floor(player.y + my)][Math.floor(player.x)] === 0) player.y += my;
 
-    // Head bob / Gun sway
-    if (isMoving) {
-        player.stepCount += 0.15;
-        weapon.style.transform = `translateX(-50%) translateY(${Math.sin(player.stepCount) * 5}px)`;
+    if (moving) {
+        player.sway += 0.15;
+        weapon.parentElement.style.transform = `translateX(-50%) translateY(${Math.sin(player.sway) * 8}px)`;
     }
 }
 
 function draw() {
-    // Background
-    ctx.fillStyle = "#050505"; ctx.fillRect(0, 0, canvas.width, canvas.height/2);
-    ctx.fillStyle = "#111"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2);
+    ctx.fillStyle = "#050505"; ctx.fillRect(0,0,canvas.width, 200);
+    ctx.fillStyle = "#111"; ctx.fillRect(0,200,canvas.width, 200);
 
-    const fov = Math.PI / 3;
+    const fov = 1.1;
     for (let i = 0; i < canvas.width; i++) {
-        let rayAngle = (player.dir - fov/2) + (i / canvas.width) * fov;
-        let distance = 0;
-        let hitWall = false;
-
-        while (!hitWall && distance < 12) {
-            distance += 0.06;
-            let tx = Math.floor(player.x + Math.cos(rayAngle) * distance);
-            let ty = Math.floor(player.y + Math.sin(rayAngle) * distance);
-            if (worldMap[ty] && worldMap[ty][tx] === 1) hitWall = true;
+        let rayA = (player.dir - fov/2) + (i / canvas.width) * fov;
+        let dist = 0, hit = false;
+        while (!hit && dist < 12) {
+            dist += 0.05;
+            let tx = Math.floor(player.x + Math.cos(rayA) * dist);
+            let ty = Math.floor(player.y + Math.sin(rayA) * dist);
+            if (worldMap[ty] && worldMap[ty][tx] === 1) hit = true;
         }
-
-        let wallH = canvas.height / (distance * Math.cos(rayAngle - player.dir));
-        let brightness = Math.max(0, 180 - (distance * 15));
-        
-        ctx.strokeStyle = `rgb(0, ${brightness}, ${brightness * 0.2})`;
+        let h = canvas.height / (dist * Math.cos(rayA - player.dir));
+        let b = Math.max(0, 180 - (dist * 18));
+        ctx.strokeStyle = `rgb(0, ${b}, ${b*0.3})`;
         ctx.beginPath();
-        ctx.moveTo(i, (canvas.height/2) - wallH/2);
-        ctx.lineTo(i, (canvas.height/2) + wallH/2);
+        ctx.moveTo(i, 200 - h/2);
+        ctx.lineTo(i, 200 + h/2);
         ctx.stroke();
     }
 }
@@ -204,7 +262,3 @@ loop();
 </script>
 </body>
 </html>
-
-
-
-
