@@ -3,44 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halisco: Tactical FPS Prototype</title>
+    <title>Halisco: Mouse-Aim Prototype</title>
     <style>
         body {
             margin: 0;
-            background-color: #1a1a1a;
+            background-color: #050505;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
-            color: #ff4d4d;
+            color: #00ff41;
             font-family: 'Courier New', Courier, monospace;
             overflow: hidden;
         }
 
         #game-container {
             position: relative;
-            border: 4px solid #333;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            border: 2px solid #333;
+            background: #000;
         }
 
-        canvas {
-            display: block;
-            background-color: #000;
-        }
+        canvas { display: block; }
 
-        #ui-overlay {
+        /* The Gun Sprite */
+        #weapon {
             position: absolute;
-            bottom: 20px;
-            left: 20px;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 280px;
             pointer-events: none;
-        }
-
-        .stat-box {
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border: 1px solid #ff4d4d;
-            margin-bottom: 5px;
+            z-index: 10;
         }
 
         #crosshair {
@@ -48,146 +42,165 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            color: rgba(255, 77, 77, 0.8);
+            color: #00ff41;
             font-size: 24px;
             pointer-events: none;
+            text-shadow: 0 0 5px #000;
         }
 
-        .controls-hint {
-            margin-top: 15px;
-            color: #888;
-            font-size: 0.8rem;
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            text-align: center;
+            border: 1px solid #00ff41;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
 
-    <h2>HALISCO: PROTOTYPE</h2>
-
     <div id="game-container">
-        <canvas id="gameCanvas" width="640" height="480"></canvas>
+        <canvas id="gameCanvas" width="800" height="450"></canvas>
         <div id="crosshair">+</div>
-        <div id="ui-overlay">
-            <div class="stat-box">HEALTH: <span id="hp">100</span></div>
-            <div class="stat-box">AMMO: <span id="ammo">30</span></div>
+        
+        <svg id="weapon" viewBox="0 0 200 200">
+            <rect x="85" y="100" width="30" height="100" fill="#151515" />
+            <rect x="90" y="70" width="20" height="80" fill="#222" />
+            <rect x="94" y="65" width="12" height="10" fill="#00ff41" fill-opacity="0.2" />
+        </svg>
+
+        <div id="instructions">
+            CLICK TO START TACTICAL OPS<br>
+            (WASD to Move | Mouse to Aim)
         </div>
     </div>
 
-    <div class="controls-hint">
-        WASD to Move | Q/E to Rotate | ESC to Reset
-    </div>
-
 <script>
-/**
- * RAYCASTING ENGINE - HALISCO PROTOTYPE
- */
-
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const weapon = document.getElementById('weapon');
+const instructions = document.getElementById('instructions');
 
-// 1 = Wall, 0 = Empty Space
 const worldMap = [
-    [1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,0,0,0,0,0,1],
-    [1,0,1,1,0,0,1,1,0,1],
-    [1,0,1,0,0,0,0,1,0,1],
-    [1,0,0,0,0,1,0,0,0,1],
-    [1,0,0,1,1,1,0,0,0,1],
-    [1,0,0,0,0,0,0,1,0,1],
-    [1,0,1,1,0,1,1,1,0,1],
-    [1,0,0,0,0,0,0,0,0,1],
-    [1,1,1,1,1,1,1,1,1,1]
+    [1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,0,0,1,1,1,0,0,0,1],
+    [1,0,1,0,0,0,0,0,0,1,0,1],
+    [1,0,0,0,0,0,0,0,0,1,0,1],
+    [1,0,0,0,1,1,1,0,0,0,0,1],
+    [1,0,1,0,1,0,1,0,1,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1]
 ];
 
 const player = {
-    x: 2,
-    y: 2,
-    dir: 0, // direction in radians
-    speed: 0.05,
-    rotSpeed: 0.04
+    x: 2, y: 2, dir: 0,
+    speed: 0.07, 
+    mouseSensitivity: 0.002,
+    stepCount: 0
 };
 
 const keys = {};
+
+// Mouse Lock Logic
+canvas.addEventListener('click', () => {
+    canvas.requestPointerLock();
+});
+
+document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement === canvas) {
+        instructions.style.display = 'none';
+    } else {
+        instructions.style.display = 'block';
+    }
+});
+
+// Mouse Movement for Rotation
+document.addEventListener('mousemove', (e) => {
+    if (document.pointerLockElement === canvas) {
+        player.dir += e.movementX * player.mouseSensitivity;
+    }
+});
+
 window.addEventListener('keydown', e => keys[e.code] = true);
 window.addEventListener('keyup', e => keys[e.code] = false);
 
-function movePlayer() {
-    let nextX = player.x;
-    let nextY = player.y;
+function update() {
+    let moveX = 0;
+    let moveY = 0;
+    let isMoving = false;
 
     if (keys['KeyW']) {
-        nextX += Math.cos(player.dir) * player.speed;
-        nextY += Math.sin(player.dir) * player.speed;
+        moveX += Math.cos(player.dir) * player.speed;
+        moveY += Math.sin(player.dir) * player.speed;
+        isMoving = true;
     }
     if (keys['KeyS']) {
-        nextX -= Math.cos(player.dir) * player.speed;
-        nextY -= Math.sin(player.dir) * player.speed;
+        moveX -= Math.cos(player.dir) * player.speed;
+        moveY -= Math.sin(player.dir) * player.speed;
+        isMoving = true;
     }
-    if (keys['KeyQ']) player.dir -= player.rotSpeed;
-    if (keys['KeyE']) player.dir += player.rotSpeed;
+    if (keys['KeyA']) {
+        moveX += Math.cos(player.dir - Math.PI/2) * player.speed;
+        moveY += Math.sin(player.dir - Math.PI/2) * player.speed;
+        isMoving = true;
+    }
+    if (keys['KeyD']) {
+        moveX += Math.cos(player.dir + Math.PI/2) * player.speed;
+        moveY += Math.sin(player.dir + Math.PI/2) * player.speed;
+        isMoving = true;
+    }
 
-    // Collision detection
-    if (worldMap[Math.floor(nextY)][Math.floor(nextX)] === 0) {
-        player.x = nextX;
-        player.y = nextY;
+    // Collision check
+    if (worldMap[Math.floor(player.y)][Math.floor(player.x + moveX)] === 0) player.x += moveX;
+    if (worldMap[Math.floor(player.y + moveY)][Math.floor(player.x)] === 0) player.y += moveY;
+
+    // Head bob / Gun sway
+    if (isMoving) {
+        player.stepCount += 0.15;
+        weapon.style.transform = `translateX(-50%) translateY(${Math.sin(player.stepCount) * 5}px)`;
     }
 }
 
-function render() {
-    // Clear Screen
-    ctx.fillStyle = "#222"; // Ceiling
-    ctx.fillRect(0, 0, canvas.width, canvas.height / 2);
-    ctx.fillStyle = "#444"; // Floor
-    ctx.fillRect(0, canvas.height / 2, canvas.width, canvas.height / 2);
+function draw() {
+    // Background
+    ctx.fillStyle = "#050505"; ctx.fillRect(0, 0, canvas.width, canvas.height/2);
+    ctx.fillStyle = "#111"; ctx.fillRect(0, canvas.height/2, canvas.width, canvas.height/2);
 
-    const fov = Math.PI / 3; // 60 degrees
-    const numRays = canvas.width;
-    const step = fov / numRays;
-
-    for (let i = 0; i < numRays; i++) {
-        let rayAngle = (player.dir - fov / 2) + (i * step);
+    const fov = Math.PI / 3;
+    for (let i = 0; i < canvas.width; i++) {
+        let rayAngle = (player.dir - fov/2) + (i / canvas.width) * fov;
         let distance = 0;
         let hitWall = false;
 
-        let eyeX = Math.cos(rayAngle);
-        let eyeY = Math.sin(rayAngle);
-
-        while (!hitWall && distance < 15) {
-            distance += 0.05;
-            let testX = Math.floor(player.x + eyeX * distance);
-            let testY = Math.floor(player.y + eyeY * distance);
-
-            if (testX < 0 || testX >= 10 || testY < 0 || testY >= 10) {
-                hitWall = true;
-                distance = 15;
-            } else if (worldMap[testY][testX] === 1) {
-                hitWall = true;
-            }
+        while (!hitWall && distance < 12) {
+            distance += 0.06;
+            let tx = Math.floor(player.x + Math.cos(rayAngle) * distance);
+            let ty = Math.floor(player.y + Math.sin(rayAngle) * distance);
+            if (worldMap[ty] && worldMap[ty][tx] === 1) hitWall = true;
         }
 
-        // Fix Fisheye effect
-        let actualDistance = distance * Math.cos(rayAngle - player.dir);
+        let wallH = canvas.height / (distance * Math.cos(rayAngle - player.dir));
+        let brightness = Math.max(0, 180 - (distance * 15));
         
-        // Calculate wall height
-        let wallHeight = canvas.height / actualDistance;
-
-        // Draw the vertical slice
-        let color = 255 - (actualDistance * 15); // Shading based on distance
-        ctx.strokeStyle = `rgb(${color}, 20, 20)`;
+        ctx.strokeStyle = `rgb(0, ${brightness}, ${brightness * 0.2})`;
         ctx.beginPath();
-        ctx.moveTo(i, (canvas.height / 2) - (wallHeight / 2));
-        ctx.lineTo(i, (canvas.height / 2) + (wallHeight / 2));
+        ctx.moveTo(i, (canvas.height/2) - wallH/2);
+        ctx.lineTo(i, (canvas.height/2) + wallH/2);
         ctx.stroke();
     }
 }
 
-function gameLoop() {
-    movePlayer();
-    render();
-    requestAnimationFrame(gameLoop);
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
 }
-
-gameLoop();
+loop();
 </script>
 </body>
 </html>
