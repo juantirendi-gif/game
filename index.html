@@ -7,8 +7,6 @@
     <style>
         :root {
             --tactical-green: #00ff41;
-            --building-gray: #444;
-            --nature-green: #2d5a27;
             --ui-bg: rgba(10, 10, 10, 0.95);
         }
 
@@ -29,7 +27,7 @@
             position: relative;
             border: 2px solid #333;
             background: #000;
-            cursor: none;
+            cursor: none; /* Hide real mouse to use crosshair */
         }
 
         canvas { display: block; }
@@ -37,17 +35,21 @@
         /* Muzzle Flash */
         #muzzle-flash {
             position: absolute;
-            top: 45%; left: 50%;
+            top: 45%;
+            left: 50%;
             transform: translate(-50%, -50%);
-            width: 120px; height: 120px;
-            background: radial-gradient(circle, #fff 0%, var(--tactical-green) 40%, transparent 70%);
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(0,255,65,0.5) 40%, transparent 70%);
             display: none;
             z-index: 5;
         }
 
+        /* Gun Graphics */
         #weapon-wrapper {
             position: absolute;
-            bottom: -20px; left: 50%;
+            bottom: -20px;
+            left: 50%;
             transform: translateX(-50%);
             width: 320px;
             pointer-events: none;
@@ -56,53 +58,43 @@
 
         #crosshair {
             position: absolute;
-            top: 50%; left: 50%;
+            top: 50%;
+            left: 50%;
             transform: translate(-50%, -50%);
             color: var(--tactical-green);
             font-size: 28px;
             pointer-events: none;
+            text-shadow: 0 0 8px #000;
         }
 
-        /* Reload Message Overlay */
-        #reload-msg {
-            position: absolute;
-            top: 60%; left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 1.5rem;
-            font-weight: bold;
-            display: none;
-            text-shadow: 2px 2px #000;
-        }
-
+        /* Bottom Control Panel */
         #control-panel {
             width: 800px;
             background: var(--ui-bg);
             border: 2px solid #333;
             border-top: none;
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 20px;
+            justify-content: space-around;
+            padding: 15px 0;
+            font-size: 0.8rem;
             box-sizing: border-box;
         }
 
-        .stat-group { text-align: center; flex: 1; }
-        .label { color: #666; font-size: 0.6rem; margin-bottom: 2px; text-transform: uppercase; }
-        .value { font-size: 1rem; font-weight: bold; }
-
-        #mouse-ui { width: 50px; height: 50px; transition: transform 0.1s; }
-        .mouse-body { fill: #1a1a1a; stroke: #333; }
-        .active-glow { fill: var(--tactical-green); opacity: 0; }
+        .stat-group { text-align: center; }
+        .label { color: #888; font-size: 0.6rem; margin-bottom: 5px; text-transform: uppercase; }
+        .value { font-size: 1.2rem; font-weight: bold; }
 
         #click-prompt {
             position: absolute;
-            top: 50%; left: 50%;
+            top: 50%;
+            left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.95);
-            padding: 40px;
+            background: rgba(0,0,0,0.9);
+            padding: 30px;
             border: 1px solid var(--tactical-green);
             text-align: center;
             z-index: 100;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -112,49 +104,42 @@
         <canvas id="gameCanvas" width="800" height="400"></canvas>
         <div id="muzzle-flash"></div>
         <div id="crosshair">⌖</div>
-        <div id="reload-msg">RELOADING...</div>
         
         <div id="weapon-wrapper">
             <svg id="weapon" viewBox="0 0 200 200">
                 <rect x="80" y="80" width="40" height="120" fill="#111" />
                 <rect x="85" y="60" width="30" height="40" fill="#1a1a1a" />
-                <rect x="92" y="40" width="16" height="30" fill="#222" />
-                <rect x="94" y="35" width="12" height="5" fill="#00ff41" fill-opacity="0.5" />
+                <rect x="92" y="40" width="16" height="30" fill="#333" />
             </svg>
         </div>
 
         <div id="click-prompt">
-            <h2 style="margin:0">HALISCO: VIBRANT OPS</h2>
-            <p style="color:white; font-size: 0.8rem;">V4 - BUILDINGS & NATURE LOADED</p>
-            <p>[ CLICK TO START ]</p>
+            <h1 style="margin:0">HALISCO</h1>
+            <p>TACTICAL PROTOTYPE V3</p>
+            <p style="color:white">[ CLICK TO DEPLOY ]</p>
         </div>
     </div>
 
     <div id="control-panel">
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <svg id="mouse-ui" viewBox="0 0 40 60">
-                <path class="mouse-body" d="M10,10 Q20,0 30,10 L35,30 Q35,55 20,55 Q5,55 5,30 Z" />
-                <path id="left-click-viz" class="active-glow" d="M10,10 Q20,0 20,10 L20,25 L10,25 Z" />
-            </svg>
-            <div class="stat-group" style="text-align: left;">
-                <div class="label">Input</div>
-                <div class="value" style="font-size: 0.7rem;">MOUSE LINKED</div>
-            </div>
-        </div>
-
         <div class="stat-group">
-            <div class="label">Tactical Ammo</div>
+            <div class="label">Movement</div>
+            <div class="value">W A S D</div>
+        </div>
+        <div class="stat-group">
+            <div class="label">Combat</div>
+            <div class="value">L-CLICK: SHOOT</div>
+        </div>
+        <div class="stat-group">
+            <div class="label">Aiming</div>
+            <div class="value">MOUSE: ROTATE</div>
+        </div>
+        <div class="stat-group">
+            <div class="label">Ammo</div>
             <div class="value" id="ammo-count">30 / 30</div>
         </div>
-
         <div class="stat-group">
-            <div class="label">Controls</div>
-            <div class="value">WASD + [R]</div>
-        </div>
-
-        <div class="stat-group" style="text-align: right;">
-            <div class="label">Environment</div>
-            <div class="value" style="color: #00ff41;">VIBRANT</div>
+            <div class="label">Status</div>
+            <div class="value" style="color: #00ff41;">READY</div>
         </div>
     </div>
 
@@ -164,29 +149,30 @@ const ctx = canvas.getContext('2d');
 const weapon = document.getElementById('weapon');
 const flash = document.getElementById('muzzle-flash');
 const ammoDisplay = document.getElementById('ammo-count');
-const reloadMsg = document.getElementById('reload-msg');
 const prompt = document.getElementById('click-prompt');
-const leftBtnViz = document.getElementById('left-click-viz');
 
-// GAME STATE
 let ammo = 30;
-let isReloading = false;
 let canShoot = true;
 
-// MAP LEGEND: 0=Empty, 1=Building (Gray), 2=Nature (Green/Trees)
 const worldMap = [
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,2,0,0,1,1,0,0,2,2,0,0,1,0,1],
-    [1,0,2,0,0,1,1,0,0,2,2,0,0,1,0,1],
-    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,1,1,0,0,0,2,0,0,0,1,1,0,0,1],
-    [1,0,1,1,0,0,0,2,0,0,0,1,1,0,0,1],
-    [1,0,0,0,0,2,2,2,2,2,0,0,0,0,0,1],
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+    [1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,1,0,0,0,0,0,1],
+    [1,0,1,1,0,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,0,1,1,1,1,0,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1]
 ];
 
-const player = { x: 2, y: 2, dir: 0, speed: 0.07, mouseSens: 0.002, sway: 0 };
+const player = {
+    x: 1.5, y: 1.5, dir: 0,
+    speed: 0.06, 
+    mouseSens: 0.0025,
+    sway: 0
+};
+
 const keys = {};
 
 canvas.addEventListener('mousedown', () => {
@@ -199,56 +185,36 @@ document.addEventListener('pointerlockchange', () => {
 });
 
 document.addEventListener('mousemove', (e) => {
-    if (document.pointerLockElement === canvas) player.dir += e.movementX * player.mouseSens;
+    if (document.pointerLockElement === canvas) {
+        player.dir += e.movementX * player.mouseSens;
+    }
 });
 
-window.addEventListener('keydown', e => {
-    keys[e.code] = true;
-    if (e.code === 'KeyR') reload(); // Trigger Reload with R
-});
+window.addEventListener('keydown', e => keys[e.code] = true);
 window.addEventListener('keyup', e => keys[e.code] = false);
 
-function reload() {
-    if (isReloading || ammo === 30) return;
-    isReloading = true;
-    canShoot = false;
-    reloadMsg.style.display = 'block';
-    weapon.style.transform = 'translateY(150px) rotate(-10deg)'; // Lower weapon
-    
-    setTimeout(() => {
-        ammo = 30;
-        ammoDisplay.innerText = `${ammo} / 30`;
-        reloadMsg.style.display = 'none';
-        weapon.style.transform = 'translateY(0) rotate(0deg)';
-        isReloading = false;
-        canShoot = true;
-    }, 1500); // 1.5 second reload time
-}
-
 function shoot() {
-    if (ammo > 0 && canShoot && !isReloading) {
+    if (ammo > 0 && canShoot) {
         ammo--;
         canShoot = false;
         ammoDisplay.innerText = `${ammo} / 30`;
+
+        // Visual FX
         flash.style.display = 'block';
-        weapon.style.transform = 'translateY(25px) scale(1.1)';
-        leftBtnViz.style.opacity = '1';
+        weapon.style.transform = 'translateY(30px) scale(1.1)';
         
         setTimeout(() => {
             flash.style.display = 'none';
             weapon.style.transform = 'translateY(0) scale(1)';
-            leftBtnViz.style.opacity = '0';
             canShoot = true;
         }, 100);
-    } else if (ammo === 0 && !isReloading) {
-        reloadMsg.innerText = "PRESS 'R' TO RELOAD";
-        reloadMsg.style.display = 'block';
-        setTimeout(() => { reloadMsg.innerText = "RELOADING..."; reloadMsg.style.display = 'none'; }, 1000);
     }
 }
 
 function update() {
-    let mx = 0, my = 0, moving = false;
+    let mx = 0, my = 0;
+    let moving = false;
+
     if (keys['KeyW']) { mx += Math.cos(player.dir) * player.speed; my += Math.sin(player.dir) * player.speed; moving = true; }
     if (keys['KeyS']) { mx -= Math.cos(player.dir) * player.speed; my -= Math.sin(player.dir) * player.speed; moving = true; }
     if (keys['KeyA']) { mx += Math.cos(player.dir - 1.57) * player.speed; my += Math.sin(player.dir - 1.57) * player.speed; moving = true; }
@@ -257,41 +223,41 @@ function update() {
     if (worldMap[Math.floor(player.y)][Math.floor(player.x + mx)] === 0) player.x += mx;
     if (worldMap[Math.floor(player.y + my)][Math.floor(player.x)] === 0) player.y += my;
 
-    if (moving && !isReloading) {
+    if (moving) {
         player.sway += 0.15;
-        weapon.parentElement.style.transform = `translateX(-50%) translateY(${Math.sin(player.sway) * 5}px)`;
+        weapon.parentElement.style.transform = `translateX(-50%) translateY(${Math.sin(player.sway) * 8}px)`;
     }
 }
 
 function draw() {
-    // SKY & FLOOR (More vibrant colors)
-    ctx.fillStyle = "#1a3a4a"; ctx.fillRect(0,0,canvas.width, 200); // Deep Blue Sky
-    ctx.fillStyle = "#222"; ctx.fillRect(0,200,canvas.width, 200); // Dark Pavement
+    ctx.fillStyle = "#050505"; ctx.fillRect(0,0,canvas.width, 200);
+    ctx.fillStyle = "#111"; ctx.fillRect(0,200,canvas.width, 200);
 
     const fov = 1.1;
     for (let i = 0; i < canvas.width; i++) {
         let rayA = (player.dir - fov/2) + (i / canvas.width) * fov;
-        let dist = 0, hit = 0;
-        while (hit === 0 && dist < 15) {
+        let dist = 0, hit = false;
+        while (!hit && dist < 12) {
             dist += 0.05;
             let tx = Math.floor(player.x + Math.cos(rayA) * dist);
             let ty = Math.floor(player.y + Math.sin(rayA) * dist);
-            if (worldMap[ty] && worldMap[ty][tx] > 0) hit = worldMap[ty][tx];
+            if (worldMap[ty] && worldMap[ty][tx] === 1) hit = true;
         }
-
         let h = canvas.height / (dist * Math.cos(rayA - player.dir));
-        let b = Math.max(0, 180 - (dist * 12));
-
-        // Color based on building vs nature
-        if (hit === 1) ctx.strokeStyle = `rgb(${b}, ${b}, ${b})`; // Building (Gray)
-        else if (hit === 2) ctx.strokeStyle = `rgb(0, ${b}, 0)`; // Nature (Green)
-        else ctx.strokeStyle = `rgb(0,0,0)`;
-
-        ctx.beginPath(); ctx.moveTo(i, 200 - h/2); ctx.lineTo(i, 200 + h/2); ctx.stroke();
+        let b = Math.max(0, 180 - (dist * 18));
+        ctx.strokeStyle = `rgb(0, ${b}, ${b*0.3})`;
+        ctx.beginPath();
+        ctx.moveTo(i, 200 - h/2);
+        ctx.lineTo(i, 200 + h/2);
+        ctx.stroke();
     }
 }
 
-function loop() { update(); draw(); requestAnimationFrame(loop); }
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
 loop();
 </script>
 </body>
