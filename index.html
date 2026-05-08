@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halisco: Tactical Combat</title>
+    <title>Halisco: Full Axis Ops</title>
     <style>
         :root {
             --tactical-green: #00ff41;
@@ -27,7 +27,6 @@
             position: relative;
             border: 2px solid #333;
             background: #000;
-            cursor: none;
         }
 
         canvas { display: block; }
@@ -36,8 +35,8 @@
             position: absolute;
             top: 45%; left: 50%;
             transform: translate(-50%, -50%);
-            width: 100px; height: 100px;
-            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(0,255,65,0.5) 40%, transparent 70%);
+            width: 120px; height: 120px;
+            background: radial-gradient(circle, #fff 0%, var(--tactical-green) 40%, transparent 70%);
             display: none;
             z-index: 5;
         }
@@ -49,6 +48,7 @@
             width: 320px;
             pointer-events: none;
             z-index: 10;
+            transition: transform 0.1s ease-out;
         }
 
         #crosshair {
@@ -60,7 +60,15 @@
             pointer-events: none;
         }
 
-        /* Bottom Control Panel */
+        #hud-msg {
+            position: absolute;
+            top: 15%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1rem;
+            font-weight: bold;
+            text-shadow: 2px 2px #000;
+        }
+
         #control-panel {
             width: 800px;
             background: var(--ui-bg);
@@ -74,30 +82,8 @@
         }
 
         .stat-group { text-align: center; flex: 1; }
-        .label { color: #666; font-size: 0.6rem; margin-bottom: 2px; text-transform: uppercase; }
+        .label { color: #666; font-size: 0.6rem; text-transform: uppercase; }
         .value { font-size: 1rem; font-weight: bold; }
-
-        /* The Custom Mouse UI from your photo */
-        #mouse-ui {
-            width: 60px;
-            height: 60px;
-            transition: transform 0.1s;
-        }
-
-        .mouse-body { fill: #1a1a1a; stroke: #333; stroke-width: 1; }
-        .mouse-glow { fill: none; stroke: var(--tactical-green); stroke-width: 1.5; opacity: 0.3; }
-        .active-glow { fill: var(--tactical-green); filter: blur(2px); opacity: 0; }
-
-        #click-prompt {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.9);
-            padding: 30px;
-            border: 1px solid var(--tactical-green);
-            text-align: center;
-            z-index: 100;
-        }
     </style>
 </head>
 <body>
@@ -106,147 +92,62 @@
         <canvas id="gameCanvas" width="800" height="400"></canvas>
         <div id="muzzle-flash"></div>
         <div id="crosshair">⌖</div>
+        <div id="hud-msg"></div>
         
         <div id="weapon-wrapper">
             <svg id="weapon" viewBox="0 0 200 200">
                 <rect x="80" y="80" width="40" height="120" fill="#111" />
                 <rect x="85" y="60" width="30" height="40" fill="#1a1a1a" />
-                <rect x="92" y="40" width="16" height="30" fill="#333" />
+                <rect x="92" y="40" width="16" height="30" fill="#222" />
+                <rect x="94" y="35" width="12" height="5" fill="#00ff41" fill-opacity="0.5" />
             </svg>
-        </div>
-
-        <div id="click-prompt">
-            <h2 style="margin:0">HALISCO OPS</h2>
-            <p style="color:white; font-size: 0.8rem;">LINKING PERIPHERALS...</p>
-            <p>[ CLICK TO START ]</p>
         </div>
     </div>
 
     <div id="control-panel">
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <svg id="mouse-ui" viewBox="0 0 40 60">
-                <path class="mouse-body" d="M10,10 Q20,0 30,10 L35,30 Q35,55 20,55 Q5,55 5,30 Z" />
-                <rect x="18" y="10" width="4" height="10" rx="2" fill="#333" /> <path id="left-click-viz" class="active-glow" d="M10,10 Q20,0 20,10 L20,25 L10,25 Z" />
-            </svg>
-            <div class="stat-group" style="text-align: left;">
-                <div class="label">Hardware</div>
-                <div class="value" style="font-size: 0.7rem;">OPTICAL_MOUSE_CONNECTED</div>
-            </div>
+        <div class="stat-group" style="text-align: left;">
+            <div class="label">Aiming Mode</div>
+            <div class="value">FULL 2-AXIS</div>
         </div>
 
         <div class="stat-group">
-            <div class="label">Ammo</div>
+            <div class="label">Tactical Ammo</div>
             <div class="value" id="ammo-count">30 / 30</div>
         </div>
 
         <div class="stat-group">
-            <div class="label">Movement</div>
-            <div class="value">WASD</div>
+            <div class="label">Refills</div>
+            <div class="value" id="scavenge-count">0 / 10</div>
         </div>
 
         <div class="stat-group" style="text-align: right;">
             <div class="label">System</div>
-            <div class="value" style="color: #00ff41;">ONLINE</div>
+            <div class="value" style="color: #00ff41;">READY</div>
         </div>
     </div>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const weapon = document.getElementById('weapon');
+const weaponWrapper = document.getElementById('weapon-wrapper');
 const flash = document.getElementById('muzzle-flash');
 const ammoDisplay = document.getElementById('ammo-count');
-const prompt = document.getElementById('click-prompt');
-const leftBtnViz = document.getElementById('left-click-viz');
+const scavengeDisplay = document.getElementById('scavenge-count');
+const hudMsg = document.getElementById('hud-msg');
 
 let ammo = 30;
-let canShoot = true;
+let refillsCollected = 0;
+let isReloading = false;
 
 const worldMap = [
-    [1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,1,1,0,0,1,1,0,1,0,1],
-    [1,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,1,0,1,1,1,0,1,0,0,1],
-    [1,0,0,0,0,0,0,0,0,0,0,1],
-    [1,1,1,1,1,1,1,1,1,1,1,1]
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+    [1,0,2,2,0,0,0,0,0,2,2,0,1,1,0,1],
+    [1,0,0,0,0,1,1,0,0,0,0,0,1,1,0,1],
+    [1,0,1,0,0,0,0,0,2,2,0,0,0,0,0,1],
+    [1,0,1,0,2,2,0,0,2,2,0,0,2,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
 ];
 
-const player = { x: 2, y: 2, dir: 0, speed: 0.06, mouseSens: 0.002, sway: 0 };
-const keys = {};
-
-canvas.addEventListener('mousedown', () => {
-    if (document.pointerLockElement === canvas) shoot();
-    else canvas.requestPointerLock();
-});
-
-document.addEventListener('pointerlockchange', () => {
-    prompt.style.display = document.pointerLockElement === canvas ? 'none' : 'block';
-});
-
-document.addEventListener('mousemove', (e) => {
-    if (document.pointerLockElement === canvas) player.dir += e.movementX * player.mouseSens;
-});
-
-window.addEventListener('keydown', e => keys[e.code] = true);
-window.addEventListener('keyup', e => keys[e.code] = false);
-
-function shoot() {
-    if (ammo > 0 && canShoot) {
-        ammo--;
-        canShoot = false;
-        ammoDisplay.innerText = `${ammo} / 30`;
-        flash.style.display = 'block';
-        weapon.style.transform = 'translateY(25px)';
-        leftBtnViz.style.opacity = '1'; // Glow the mouse UI
-        
-        setTimeout(() => {
-            flash.style.display = 'none';
-            weapon.style.transform = 'translateY(0)';
-            leftBtnViz.style.opacity = '0';
-            canShoot = true;
-        }, 100);
-    }
-}
-
-function update() {
-    let mx = 0, my = 0, moving = false;
-    if (keys['KeyW']) { mx += Math.cos(player.dir) * player.speed; my += Math.sin(player.dir) * player.speed; moving = true; }
-    if (keys['KeyS']) { mx -= Math.cos(player.dir) * player.speed; my -= Math.sin(player.dir) * player.speed; moving = true; }
-    if (keys['KeyA']) { mx += Math.cos(player.dir - 1.57) * player.speed; my += Math.sin(player.dir - 1.57) * player.speed; moving = true; }
-    if (keys['KeyD']) { mx += Math.cos(player.dir + 1.57) * player.speed; my += Math.sin(player.dir + 1.57) * player.speed; moving = true; }
-
-    if (worldMap[Math.floor(player.y)][Math.floor(player.x + mx)] === 0) player.x += mx;
-    if (worldMap[Math.floor(player.y + my)][Math.floor(player.x)] === 0) player.y += my;
-
-    if (moving) {
-        player.sway += 0.15;
-        weapon.parentElement.style.transform = `translateX(-50%) translateY(${Math.sin(player.sway) * 5}px)`;
-    }
-}
-
-function draw() {
-    ctx.fillStyle = "#050505"; ctx.fillRect(0,0,canvas.width, 200);
-    ctx.fillStyle = "#111"; ctx.fillRect(0,200,canvas.width, 200);
-    const fov = 1.1;
-    for (let i = 0; i < canvas.width; i++) {
-        let rayA = (player.dir - fov/2) + (i / canvas.width) * fov;
-        let dist = 0, hit = false;
-        while (!hit && dist < 12) {
-            dist += 0.05;
-            let tx = Math.floor(player.x + Math.cos(rayA) * dist);
-            let ty = Math.floor(player.y + Math.sin(rayA) * dist);
-            if (worldMap[ty] && worldMap[ty][tx] === 1) hit = true;
-        }
-        let h = canvas.height / (dist * Math.cos(rayA - player.dir));
-        let b = Math.max(0, 160 - (dist * 15));
-        ctx.strokeStyle = `rgb(0, ${b}, ${b*0.2})`;
-        ctx.beginPath(); ctx.moveTo(i, 200 - h/2); ctx.lineTo(i, 200 + h/2); ctx.stroke();
-    }
-}
-
-function loop() { update(); draw(); requestAnimationFrame(loop); }
-loop();
-</script>
-</body>
-</html>
+const refills = [
+    {x: 5, y: 1.5}, {x: 14, y: 1.5}, {x: 8,
