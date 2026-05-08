@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halisco: Tactical Combat</title>
+    <title>Halisco: Immersive Ops</title>
     <style>
         :root {
             --tactical-green: #00ff41;
-            --ui-bg: rgba(10, 10, 10, 0.95);
+            --ui-bg: rgba(5, 5, 5, 0.9);
         }
 
         body {
@@ -25,230 +25,229 @@
 
         #game-container {
             position: relative;
-            border: 2px solid #333;
-            background: #000;
-            cursor: none; /* Hide real mouse to use crosshair */
+            border: 2px solid #222;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
         }
 
         canvas { display: block; }
 
-        /* Muzzle Flash */
-        #muzzle-flash {
-            position: absolute;
-            top: 45%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 100px;
-            height: 100px;
-            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(0,255,65,0.5) 40%, transparent 70%);
-            display: none;
-            z-index: 5;
-        }
-
-        /* Gun Graphics */
         #weapon-wrapper {
             position: absolute;
-            bottom: -20px;
-            left: 50%;
+            bottom: -10px; left: 50%;
             transform: translateX(-50%);
-            width: 320px;
+            width: 350px;
             pointer-events: none;
             z-index: 10;
         }
 
         #crosshair {
             position: absolute;
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             color: var(--tactical-green);
-            font-size: 28px;
+            font-size: 30px;
             pointer-events: none;
-            text-shadow: 0 0 8px #000;
+            opacity: 0.7;
         }
 
-        /* Bottom Control Panel */
+        /* Tactical HUD */
         #control-panel {
             width: 800px;
             background: var(--ui-bg);
-            border: 2px solid #333;
+            border: 1px solid #333;
             border-top: none;
             display: flex;
-            justify-content: space-around;
-            padding: 15px 0;
-            font-size: 0.8rem;
+            padding: 12px;
             box-sizing: border-box;
+            justify-content: space-around;
         }
 
-        .stat-group { text-align: center; }
-        .label { color: #888; font-size: 0.6rem; margin-bottom: 5px; text-transform: uppercase; }
-        .value { font-size: 1.2rem; font-weight: bold; }
+        .stat { text-align: center; }
+        .label { color: #555; font-size: 0.6rem; text-transform: uppercase; margin-bottom: 3px; }
+        .value { font-size: 1rem; font-weight: bold; letter-spacing: 1px; }
 
-        #click-prompt {
+        #scavenge-alert {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.9);
-            padding: 30px;
-            border: 1px solid var(--tactical-green);
-            text-align: center;
-            z-index: 100;
-            cursor: pointer;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 255, 65, 0.1);
+            padding: 10px;
+            border-right: 3px solid var(--tactical-green);
         }
+    </div>
     </style>
 </head>
 <body>
 
     <div id="game-container">
-        <canvas id="gameCanvas" width="800" height="400"></canvas>
-        <div id="muzzle-flash"></div>
+        <canvas id="gameCanvas" width="800" height="450"></canvas>
         <div id="crosshair">⌖</div>
         
-        <div id="weapon-wrapper">
-            <svg id="weapon" viewBox="0 0 200 200">
-                <rect x="80" y="80" width="40" height="120" fill="#111" />
-                <rect x="85" y="60" width="30" height="40" fill="#1a1a1a" />
-                <rect x="92" y="40" width="16" height="30" fill="#333" />
-            </svg>
+        <div id="scavenge-alert">
+            <div style="font-size: 0.6rem; color: #888;">MISSION OBJECTIVE</div>
+            <div id="obj-text">SCAVENGE AMMO: 0/10</div>
         </div>
 
-        <div id="click-prompt">
-            <h1 style="margin:0">HALISCO</h1>
-            <p>TACTICAL PROTOTYPE V3</p>
-            <p style="color:white">[ CLICK TO DEPLOY ]</p>
+        <div id="weapon-wrapper">
+            <svg id="weapon" viewBox="0 0 200 200">
+                <rect x="75" y="100" width="50" height="100" fill="#0c0c0c" />
+                <rect x="80" y="70" width="40" height="40" fill="#151515" />
+                <rect x="90" y="40" width="20" height="50" fill="#1a1a1a" />
+                <circle cx="100" cy="50" r="3" fill="#00ff41" fill-opacity="0.4" />
+            </svg>
         </div>
     </div>
 
     <div id="control-panel">
-        <div class="stat-group">
-            <div class="label">Movement</div>
-            <div class="value">W A S D</div>
+        <div class="stat">
+            <div class="label">Directional Logic</div>
+            <div class="value">FULL 360° AXIS</div>
         </div>
-        <div class="stat-group">
-            <div class="label">Combat</div>
-            <div class="value">L-CLICK: SHOOT</div>
+        <div class="stat">
+            <div class="label">Ammo Reserve</div>
+            <div class="value" id="ammo-val">30 / 30</div>
         </div>
-        <div class="stat-group">
-            <div class="label">Aiming</div>
-            <div class="value">MOUSE: ROTATE</div>
-        </div>
-        <div class="stat-group">
-            <div class="label">Ammo</div>
-            <div class="value" id="ammo-count">30 / 30</div>
-        </div>
-        <div class="stat-group">
-            <div class="label">Status</div>
-            <div class="value" style="color: #00ff41;">READY</div>
+        <div class="stat">
+            <div class="label">Environment Status</div>
+            <div class="value" style="color: #fff;">RENDERED</div>
         </div>
     </div>
 
 <script>
+/**
+ * HALISCO ENGINE V6 - IMMERSIVE WORLD
+ */
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const weapon = document.getElementById('weapon');
-const flash = document.getElementById('muzzle-flash');
-const ammoDisplay = document.getElementById('ammo-count');
-const prompt = document.getElementById('click-prompt');
+const weapon = document.getElementById('weapon-wrapper');
 
-let ammo = 30;
-let canShoot = true;
-
+// Map: 1=Building, 2=Nature (Greenery), 3=Industrial Wall
 const worldMap = [
-    [1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,0,1,0,0,0,0,0,1],
-    [1,0,1,1,0,1,0,1,1,1,0,1],
-    [1,0,0,0,0,0,0,0,0,0,0,1],
-    [1,1,1,0,1,1,1,1,0,1,1,1],
-    [1,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,1,1,1,0,1,1,1,1,0,1],
-    [1,0,0,0,0,0,0,0,0,0,0,1],
-    [1,1,1,1,1,1,1,1,1,1,1,1]
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,2,2,0,3,3,3,0,0,2,2,0,0,0,1],
+    [1,0,2,2,0,0,0,0,0,0,2,2,0,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
+    [1,0,3,3,0,1,1,1,0,0,0,0,0,1,0,1],
+    [1,0,0,0,0,1,1,1,0,2,2,2,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,2,2,2,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+];
+
+// 10 Scavenge Items
+let refills = [
+    {x: 4.5, y: 1.5}, {x: 14, y: 1.5}, {x: 8.5, y: 4}, {x: 2, y: 7},
+    {x: 12, y: 7}, {x: 4, y: 4.5}, {x: 14, y: 6}, {x: 10, y: 2.5},
+    {x: 6, y: 7}, {x: 1.5, y: 4.5}
 ];
 
 const player = {
-    x: 1.5, y: 1.5, dir: 0,
-    speed: 0.06, 
-    mouseSens: 0.0025,
-    sway: 0
+    x: 2, y: 2, dir: 0, pitch: 0,
+    speed: 0.08, mouseSens: 0.002,
+    ammo: 30, collected: 0, sway: 0
 };
 
 const keys = {};
 
-canvas.addEventListener('mousedown', () => {
-    if (document.pointerLockElement === canvas) shoot();
-    else canvas.requestPointerLock();
-});
-
-document.addEventListener('pointerlockchange', () => {
-    prompt.style.display = document.pointerLockElement === canvas ? 'none' : 'block';
-});
+// Pointer Lock for Full Look Direction
+canvas.addEventListener('mousedown', () => canvas.requestPointerLock());
 
 document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === canvas) {
         player.dir += e.movementX * player.mouseSens;
+        player.pitch -= e.movementY * 0.8;
+        // Clamp pitch to avoid neck-breaking
+        player.pitch = Math.max(-180, Math.min(180, player.pitch));
+        
+        // Weapon tilt follow
+        weapon.style.transform = `translateX(-50%) translateY(${player.pitch * -0.15}px)`;
     }
 });
 
-window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if(e.code === 'KeyR' && player.ammo < 30) reload();
+});
 window.addEventListener('keyup', e => keys[e.code] = false);
 
-function shoot() {
-    if (ammo > 0 && canShoot) {
-        ammo--;
-        canShoot = false;
-        ammoDisplay.innerText = `${ammo} / 30`;
-
-        // Visual FX
-        flash.style.display = 'block';
-        weapon.style.transform = 'translateY(30px) scale(1.1)';
-        
-        setTimeout(() => {
-            flash.style.display = 'none';
-            weapon.style.transform = 'translateY(0) scale(1)';
-            canShoot = true;
-        }, 100);
-    }
+function reload() {
+    player.ammo = 30;
+    document.getElementById('ammo-val').innerText = "30 / 30";
 }
 
 function update() {
-    let mx = 0, my = 0;
-    let moving = false;
-
+    let mx = 0, my = 0, moving = false;
     if (keys['KeyW']) { mx += Math.cos(player.dir) * player.speed; my += Math.sin(player.dir) * player.speed; moving = true; }
     if (keys['KeyS']) { mx -= Math.cos(player.dir) * player.speed; my -= Math.sin(player.dir) * player.speed; moving = true; }
     if (keys['KeyA']) { mx += Math.cos(player.dir - 1.57) * player.speed; my += Math.sin(player.dir - 1.57) * player.speed; moving = true; }
     if (keys['KeyD']) { mx += Math.cos(player.dir + 1.57) * player.speed; my += Math.sin(player.dir + 1.57) * player.speed; moving = true; }
 
+    // Collisions
     if (worldMap[Math.floor(player.y)][Math.floor(player.x + mx)] === 0) player.x += mx;
     if (worldMap[Math.floor(player.y + my)][Math.floor(player.x)] === 0) player.y += my;
 
+    // Item Collection
+    refills.forEach((r, i) => {
+        if (Math.hypot(player.x - r.x, player.y - r.y) < 0.5) {
+            refills.splice(i, 1);
+            player.collected++;
+            document.getElementById('obj-text').innerText = `SCAVENGE AMMO: ${player.collected}/10`;
+        }
+    });
+
     if (moving) {
-        player.sway += 0.15;
-        weapon.parentElement.style.transform = `translateX(-50%) translateY(${Math.sin(player.sway) * 8}px)`;
+        player.sway += 0.18;
+        weapon.style.marginBottom = `${Math.sin(player.sway) * 6}px`;
     }
 }
 
 function draw() {
-    ctx.fillStyle = "#050505"; ctx.fillRect(0,0,canvas.width, 200);
-    ctx.fillStyle = "#111"; ctx.fillRect(0,200,canvas.width, 200);
+    const horizon = (canvas.height / 2) + player.pitch;
+
+    // SKY (Atmospheric Gradient)
+    let skyGrd = ctx.createLinearGradient(0, 0, 0, horizon);
+    skyGrd.addColorStop(0, "#08101a");
+    skyGrd.addColorStop(1, "#1a3a4a");
+    ctx.fillStyle = skyGrd;
+    ctx.fillRect(0, 0, canvas.width, horizon);
+
+    // FLOOR
+    ctx.fillStyle = "#111";
+    ctx.fillRect(0, horizon, canvas.width, canvas.height - horizon);
 
     const fov = 1.1;
     for (let i = 0; i < canvas.width; i++) {
         let rayA = (player.dir - fov/2) + (i / canvas.width) * fov;
-        let dist = 0, hit = false;
-        while (!hit && dist < 12) {
+        let dist = 0, hit = 0;
+        let cosA = Math.cos(rayA), sinA = Math.sin(rayA);
+
+        while (hit === 0 && dist < 16) {
             dist += 0.05;
-            let tx = Math.floor(player.x + Math.cos(rayA) * dist);
-            let ty = Math.floor(player.y + Math.sin(rayA) * dist);
-            if (worldMap[ty] && worldMap[ty][tx] === 1) hit = true;
+            let tx = Math.floor(player.x + cosA * dist);
+            let ty = Math.floor(player.y + sinA * dist);
+            if (worldMap[ty] && worldMap[ty][tx] > 0) hit = worldMap[ty][tx];
+            
+            // Check for ammo crates (hit type 4)
+            refills.forEach(r => {
+                if (Math.floor(player.x + cosA * dist) === Math.floor(r.x) && 
+                    Math.floor(player.y + sinA * dist) === Math.floor(r.y)) hit = 4;
+            });
         }
-        let h = canvas.height / (dist * Math.cos(rayA - player.dir));
-        let b = Math.max(0, 180 - (dist * 18));
-        ctx.strokeStyle = `rgb(0, ${b}, ${b*0.3})`;
+
+        let correctedDist = dist * Math.cos(rayA - player.dir);
+        let h = canvas.height / correctedDist;
+        let b = Math.max(0, 200 - (dist * 12));
+
+        // Material Shading
+        if (hit === 1) ctx.strokeStyle = `rgb(${b}, ${b}, ${b})`;       // Concrete
+        else if (hit === 2) ctx.strokeStyle = `rgb(0, ${b*0.8}, 0)`;    // Nature
+        else if (hit === 3) ctx.strokeStyle = `rgb(${b*0.5}, 0, 0)`;    // Tactical Red Walls
+        else if (hit === 4) ctx.strokeStyle = `rgb(${b}, ${b}, 0)`;     // Ammo Crate
+        else ctx.strokeStyle = "#000";
+
         ctx.beginPath();
-        ctx.moveTo(i, 200 - h/2);
-        ctx.lineTo(i, 200 + h/2);
+        ctx.moveTo(i, horizon - h/2);
+        ctx.lineTo(i, horizon + h/2);
         ctx.stroke();
     }
 }
