@@ -34,7 +34,14 @@
             width: 800px;
             height: 400px;
             cursor: pointer;
-            transition: box-shadow 0.1s;
+            /* Added transition for the blood border effect */
+            transition: box-shadow 0.5s ease-in-out, border-color 0.5s;
+        }
+
+        /* New class for the death state */
+        .death-glow {
+            border-color: var(--damage-red) !important;
+            box-shadow: inset 0 0 100px #7a0000, 0 0 30px #ff0000 !important;
         }
 
         canvas { display: block; }
@@ -216,6 +223,10 @@ function showNotification(text, color = "var(--tactical-green)") {
 }
 
 function startNewGame() {
+    // Reset effects
+    gameContainer.classList.remove('death-glow');
+    overlayTitle.style.color = "var(--tactical-green)";
+    
     wave = 1;
     killsInWave = 0;
     enemiesSpawnedInWave = 0;
@@ -251,12 +262,10 @@ function updateUI() {
     
     healthEl.innerText = Math.floor(player.health) + "%";
     
-    // UI Color coding for health
     if (player.health > 60) healthEl.style.color = "var(--tactical-green)";
     else if (player.health > 30) healthEl.style.color = "yellow";
     else healthEl.style.color = "var(--damage-red)";
 
-    // Update Status Label based on regeneration
     if (Date.now() - player.lastDamageTime > 6000 && player.health < 100) {
         statusEl.innerText = "REGEN";
         statusEl.style.color = "var(--regen-blue)";
@@ -393,9 +402,7 @@ function checkWaveProgress() {
 
 function handleRegeneration() {
     const now = Date.now();
-    // If 6 seconds have passed since last damage
     if (now - player.lastDamageTime > 6000) {
-        // If not at max health and 1 second has passed since last regen tick
         if (player.health < 100 && now - player.lastRegenTick > 1000) {
             player.health = Math.min(100, player.health + 5);
             player.lastRegenTick = now;
@@ -425,16 +432,23 @@ function update() {
         let distToPlayer = Math.hypot(p.x - player.x, p.y - player.y);
         if (distToPlayer < 0.3) {
             player.health -= 10;
-            player.lastDamageTime = Date.now(); // Reset regen timer
+            player.lastDamageTime = Date.now();
             updateUI();
             gameContainer.style.boxShadow = "inset 0 0 50px #ff0000";
-            setTimeout(() => gameContainer.style.boxShadow = "none", 100);
+            setTimeout(() => { if(gameState === 'playing') gameContainer.style.boxShadow = "none"; }, 100);
             projectiles.splice(i, 1);
+            
             if (player.health <= 0) {
                 gameState = 'over';
                 document.exitPointerLock();
+                
+                // Trigger the red border effect
+                gameContainer.classList.add('death-glow');
+                
                 overlay.style.display = 'flex';
-                overlayTitle.innerText = "MISSION FAILED";
+                // Custom death text requested
+                overlayTitle.innerText = "YOUR DEAD";
+                overlayTitle.style.color = "var(--damage-red)";
                 overlaySub.innerText = "CLICK TO RETRY";
             }
             continue;
