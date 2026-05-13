@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halisco: Combat Ops V13.1</title>
+    <title>Halisco: Combat Ops - Armor Regen Protocol</title>
     <style>
         :root {
             --tactical-green: #00ff41;
             --ui-bg: #050505;
             --damage-red: #ff3131;
+            --regen-blue: #31d7ff;
         }
 
         body {
@@ -33,6 +34,7 @@
             width: 800px;
             height: 400px;
             cursor: pointer;
+            transition: box-shadow 0.1s;
         }
 
         canvas { display: block; }
@@ -67,6 +69,19 @@
             pointer-events: none;
             z-index: 6;
             display: none;
+        }
+
+        #notification {
+            position: absolute;
+            top: 20%; left: 50%;
+            transform: translateX(-50%);
+            font-size: 2rem;
+            font-weight: bold;
+            text-align: center;
+            text-shadow: 0 0 10px #000;
+            z-index: 50;
+            display: none;
+            pointer-events: none;
         }
 
         #overlay {
@@ -112,24 +127,15 @@
         .stat-group { text-align: center; }
         .label { color: #555; font-size: 0.6rem; text-transform: uppercase; }
         .value { font-size: 1.1rem; font-weight: bold; }
-
-        #damage-vignette {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none;
-            z-index: 15;
-            transition: box-shadow 0.1s;
-        }
     </style>
 </head>
 <body>
 
     <div id="game-container">
-        <div id="damage-vignette"></div>
-        
+        <div id="notification">WAVE 1 ARRIVING</div>
         <div id="overlay">
             <h1 id="overlay-title">HALISCO</h1>
-            <p id="overlay-sub" class="blink">CLICK TO START GENERATION</p>
+            <p id="overlay-sub" class="blink">CLICK TO BEGIN OPERATION</p>
         </div>
         
         <canvas id="gameCanvas" width="800" height="400"></canvas>
@@ -152,15 +158,19 @@
             <div class="value" id="health-val">100%</div>
         </div>
         <div class="stat-group">
-            <div class="label">Ammo Count</div>
-            <div id="ammo-val">30 / 30</div>
+            <div class="label">Ammo</div>
+            <div id="ammo-val" class="value">30 / 30</div>
         </div>
         <div class="stat-group">
-            <div class="label">Threats Neutralized</div>
-            <div class="value" id="kills-val">0</div>
+            <div class="label">Wave</div>
+            <div class="value" id="wave-val">1 / 5</div>
         </div>
         <div class="stat-group">
-            <div class="label">System Status</div>
+            <div class="label">Kills (Wave)</div>
+            <div class="value" id="kills-val">0 / 10</div>
+        </div>
+        <div class="stat-group">
+            <div class="label">Status</div>
             <div id="status-val" class="value" style="color: #666;">IDLE</div>
         </div>
     </div>
@@ -168,53 +178,96 @@
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const gameContainer = document.getElementById('game-container');
 const weaponWrap = document.getElementById('weapon-wrapper');
 const muzzle = document.getElementById('muzzle-flash');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlaySub = document.getElementById('overlay-sub');
 const crosshair = document.getElementById('crosshair');
+const notify = document.getElementById('notification');
 
 let gameState = 'menu'; 
 let worldMap = [];
 let enemies = [];
-let kills = 0;
+let projectiles = [];
+let wave = 1;
+let killsInWave = 0;
+let enemiesSpawnedInWave = 0;
+const ENEMIES_PER_WAVE = 10;
+const MAX_WAVES = 5;
 const MAP_SIZE = 16;
 const zBuffer = new Array(canvas.width);
 
 const player = {
     x: 2.5, y: 2.5, dir: 0, pitch: 0,
-    speed: 0.07, ammo: 30, reloading: false, health: 100
+    speed: 0.07, ammo: 30, reloading: false, health: 100,
+    lastDamageTime: 0, 
+    lastRegenTick: 0
 };
 
 const keys = {};
 
-// This function now handles the "Generation" on click
+function showNotification(text, color = "var(--tactical-green)") {
+    notify.innerText = text;
+    notify.style.color = color;
+    notify.style.display = 'block';
+    setTimeout(() => { notify.style.display = 'none'; }, 3000);
+}
+
 function startNewGame() {
-    console.log("Generating World...");
-    kills = 0;
+    wave = 1;
+    killsInWave = 0;
+    enemiesSpawnedInWave = 0;
     player.health = 100;
     player.ammo = 30;
     player.x = 2.5; player.y = 2.5;
     player.dir = 0;
+    player.lastDamageTime = Date.now();
     enemies = [];
+    projectiles = [];
     
-    // 1. Procedural Map Generation
     generateMap();
+    startWave();
     
-    // 2. Spawn Combatants
-    for(let i=0; i<4; i++) spawnEnemy();
-    
-    // 3. UI Transition
     gameState = 'playing';
     overlay.style.display = 'none';
     weaponWrap.style.display = 'block';
     crosshair.style.display = 'block';
-    document.getElementById('status-val').innerText = "ACTIVE";
-    document.getElementById('status-val').style.color = "var(--tactical-green)";
-    document.getElementById('health-val').innerText = "100%";
-    document.getElementById('ammo-val').innerText = "30 / 30";
-    document.getElementById('kills-val').innerText = "0";
+    updateUI();
+}
+
+function startWave() {
+    killsInWave = 0;
+    enemiesSpawnedInWave = 0;
+    enemies = [];
+    showNotification(`WAVE ${wave} ARRIVING`);
+    for(let i=0; i<4; i++) spawnEnemy();
+}
+
+function updateUI() {
+    const healthEl = document.getElementById('health-val');
+    const statusEl = document.getElementById('status-val');
+    
+    healthEl.innerText = Math.floor(player.health) + "%";
+    
+    // UI Color coding for health
+    if (player.health > 60) healthEl.style.color = "var(--tactical-green)";
+    else if (player.health > 30) healthEl.style.color = "yellow";
+    else healthEl.style.color = "var(--damage-red)";
+
+    // Update Status Label based on regeneration
+    if (Date.now() - player.lastDamageTime > 6000 && player.health < 100) {
+        statusEl.innerText = "REGEN";
+        statusEl.style.color = "var(--regen-blue)";
+    } else {
+        statusEl.innerText = "ACTIVE";
+        statusEl.style.color = "var(--tactical-green)";
+    }
+
+    document.getElementById('ammo-val').innerText = `${player.ammo} / 30`;
+    document.getElementById('wave-val').innerText = `${wave} / ${MAX_WAVES}`;
+    document.getElementById('kills-val').innerText = `${killsInWave} / ${ENEMIES_PER_WAVE}`;
 }
 
 function generateMap() {
@@ -225,23 +278,28 @@ function generateMap() {
             else if (Math.random() < 0.15) worldMap[y][x] = Math.random() > 0.5 ? 1 : 2;
         }
     }
-    // Safety clear around spawn
     worldMap[2][2] = 0; worldMap[3][2] = 0; worldMap[2][3] = 0;
 }
 
 function spawnEnemy() {
+    if (enemiesSpawnedInWave >= ENEMIES_PER_WAVE) return;
     let ex, ey;
     do {
         ex = Math.random() * (MAP_SIZE - 2) + 1;
         ey = Math.random() * (MAP_SIZE - 2) + 1;
     } while (worldMap[Math.floor(ey)][Math.floor(ex)] !== 0 || Math.hypot(ex-player.x, ey-player.y) < 5);
-    enemies.push({ x: ex, y: ey, health: 100, lastShot: Date.now() + 2000, hitFlash: 0 });
+    
+    enemies.push({ 
+        x: ex, y: ey, health: 100, 
+        lastShot: Date.now() + (Math.random() * 2000), 
+        hitFlash: 0, isFiring: false 
+    });
+    enemiesSpawnedInWave++;
 }
 
-// Left click triggers generation
 document.addEventListener('mousedown', (e) => {
-    if (e.button === 0) { // Left Click only
-        if (gameState === 'menu' || gameState === 'over') {
+    if (e.button === 0) {
+        if (gameState === 'menu' || gameState === 'over' || gameState === 'win') {
             startNewGame();
             canvas.requestPointerLock();
         } else if (gameState === 'playing') {
@@ -274,7 +332,7 @@ function reload() {
     weaponWrap.style.transform = 'translateX(-50%) translateY(250px)';
     setTimeout(() => {
         player.ammo = 30;
-        document.getElementById('ammo-val').innerText = "30 / 30";
+        updateUI();
         weaponWrap.style.transform = `translateX(-50%) translateY(${player.pitch * -0.15}px)`;
         player.reloading = false;
     }, 1200);
@@ -283,7 +341,7 @@ function reload() {
 function shoot() {
     if (player.ammo <= 0 || player.reloading) return;
     player.ammo--;
-    document.getElementById('ammo-val').innerText = `${player.ammo} / 30`;
+    updateUI();
     muzzle.style.display = 'block';
     setTimeout(() => muzzle.style.display = 'none', 50);
 
@@ -295,7 +353,7 @@ function shoot() {
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
         
         let dist = Math.hypot(dx, dy);
-        if (Math.abs(angleDiff) < 0.12 && dist < 15) {
+        if (Math.abs(angleDiff) < 0.15 && dist < 15) {
             let clearShot = true;
             for(let d=0; d<dist; d+=0.2) {
                 if(worldMap[Math.floor(player.y + Math.sin(angleToEn)*d)][Math.floor(player.x + Math.cos(angleToEn)*d)] > 0) {
@@ -305,16 +363,51 @@ function shoot() {
             if(clearShot) {
                 en.health -= 40;
                 en.hitFlash = 5;
-                if(en.health <= 0) { kills++; document.getElementById('kills-val').innerText = kills; }
+                if(en.health <= 0) { 
+                    killsInWave++; 
+                    updateUI();
+                    checkWaveProgress();
+                }
             }
         }
     });
     enemies = enemies.filter(en => en.health > 0);
-    while(enemies.length < 4) spawnEnemy();
+    while(enemies.length < 4 && enemiesSpawnedInWave < ENEMIES_PER_WAVE) spawnEnemy();
+}
+
+function checkWaveProgress() {
+    if (killsInWave >= ENEMIES_PER_WAVE) {
+        if (wave < MAX_WAVES) {
+            showNotification(`WAVE ${wave} COMPLETE`, "#fff");
+            wave++;
+            setTimeout(startWave, 2000);
+        } else {
+            gameState = 'win';
+            document.exitPointerLock();
+            overlay.style.display = 'flex';
+            overlayTitle.innerText = "MISSION SUCCESS";
+            overlaySub.innerText = "ALL THREATS NEUTRALIZED. CLICK TO REPLAY.";
+        }
+    }
+}
+
+function handleRegeneration() {
+    const now = Date.now();
+    // If 6 seconds have passed since last damage
+    if (now - player.lastDamageTime > 6000) {
+        // If not at max health and 1 second has passed since last regen tick
+        if (player.health < 100 && now - player.lastRegenTick > 1000) {
+            player.health = Math.min(100, player.health + 5);
+            player.lastRegenTick = now;
+            updateUI();
+        }
+    }
 }
 
 function update() {
     if (gameState !== 'playing') return;
+
+    handleRegeneration();
 
     let mx = 0, my = 0;
     if (keys['KeyW']) { mx += Math.cos(player.dir) * player.speed; my += Math.sin(player.dir) * player.speed; }
@@ -325,25 +418,50 @@ function update() {
     if (worldMap[Math.floor(player.y)][Math.floor(player.x + mx)] === 0) player.x += mx;
     if (worldMap[Math.floor(player.y + my)][Math.floor(player.x)] === 0) player.y += my;
 
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        let p = projectiles[i];
+        p.x += p.vx; p.y += p.vy;
+        if (worldMap[Math.floor(p.y)][Math.floor(p.x)] > 0) { projectiles.splice(i, 1); continue; }
+        let distToPlayer = Math.hypot(p.x - player.x, p.y - player.y);
+        if (distToPlayer < 0.3) {
+            player.health -= 10;
+            player.lastDamageTime = Date.now(); // Reset regen timer
+            updateUI();
+            gameContainer.style.boxShadow = "inset 0 0 50px #ff0000";
+            setTimeout(() => gameContainer.style.boxShadow = "none", 100);
+            projectiles.splice(i, 1);
+            if (player.health <= 0) {
+                gameState = 'over';
+                document.exitPointerLock();
+                overlay.style.display = 'flex';
+                overlayTitle.innerText = "MISSION FAILED";
+                overlaySub.innerText = "CLICK TO RETRY";
+            }
+            continue;
+        }
+        p.life--;
+        if (p.life <= 0) projectiles.splice(i, 1);
+    }
+
     enemies.forEach(en => {
         let dist = Math.hypot(player.x - en.x, player.y - en.y);
         if (en.hitFlash > 0) en.hitFlash--;
-        if (dist < 10) {
+        if (dist < 10) { 
             let ang = Math.atan2(player.y - en.y, player.x - en.x);
-            let nex = en.x + Math.cos(ang) * 0.025;
-            let ney = en.y + Math.sin(ang) * 0.025;
-            if (worldMap[Math.floor(ney)][Math.floor(nex)] === 0) { en.x = nex; en.y = ney; }
-            if (dist < 7 && Date.now() - en.lastShot > 2500) {
-                player.health -= 15;
+            if (dist > 3) {
+                let nex = en.x + Math.cos(ang) * 0.02;
+                let ney = en.y + Math.sin(ang) * 0.02;
+                if (worldMap[Math.floor(ney)][Math.floor(nex)] === 0) { en.x = nex; en.y = ney; }
+            }
+            if (Date.now() - en.lastShot > (3000 - (wave * 200))) {
+                en.isFiring = true;
                 en.lastShot = Date.now();
-                document.getElementById('health-val').innerText = Math.max(0, player.health) + "%";
-                if (player.health <= 0) {
-                    gameState = 'over';
-                    document.exitPointerLock();
-                    overlay.style.display = 'flex';
-                    overlayTitle.innerText = "MISSION FAILED";
-                    overlaySub.innerText = "CLICK TO RE-GENERATE";
-                }
+                projectiles.push({
+                    x: en.x, y: en.y,
+                    vx: Math.cos(ang) * 0.12, vy: Math.sin(ang) * 0.12,
+                    life: 100
+                });
+                setTimeout(() => en.isFiring = false, 150);
             }
         }
     });
@@ -377,21 +495,46 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(i, horizon - h/2); ctx.lineTo(i, horizon + h/2); ctx.stroke();
     }
 
-    enemies.sort((a,b) => Math.hypot(b.x-player.x, b.y-player.y) - Math.hypot(a.x-player.x, a.y-player.y));
-    enemies.forEach(en => {
-        let dx = en.x - player.x, dy = en.y - player.y;
+    let sprites = [
+        ...enemies.map(e => ({...e, type: 'enemy'})),
+        ...projectiles.map(p => ({...p, type: 'projectile'}))
+    ];
+    sprites.sort((a,b) => Math.hypot(b.x-player.x, b.y-player.y) - Math.hypot(a.x-player.x, a.y-player.y));
+
+    sprites.forEach(s => {
+        let dx = s.x - player.x, dy = s.y - player.y;
         let dist = Math.hypot(dx, dy);
         let spriteAngle = Math.atan2(dy, dx) - player.dir;
         while(spriteAngle < -Math.PI) spriteAngle += Math.PI * 2;
         while(spriteAngle > Math.PI) spriteAngle -= Math.PI * 2;
+
         if (Math.abs(spriteAngle) < fov) {
             let spriteSize = canvas.height / (dist * Math.cos(spriteAngle));
             let xPos = (0.5 * (spriteAngle / (fov / 2)) + 0.5) * canvas.width;
-            if (dist < zBuffer[Math.floor(xPos)] + 0.2) {
-                ctx.fillStyle = en.hitFlash > 0 ? "#fff" : "#ff3131";
-                ctx.fillRect(xPos - spriteSize/4, horizon - spriteSize/2, spriteSize/2, spriteSize);
-                ctx.fillStyle = "#333"; ctx.fillRect(xPos - 20, horizon - spriteSize/2 - 15, 40, 5);
-                ctx.fillStyle = "#00ff41"; ctx.fillRect(xPos - 20, horizon - spriteSize/2 - 15, 40 * (en.health/100), 5);
+            if (dist < zBuffer[Math.floor(xPos)] + 0.3) {
+                if (s.type === 'enemy') {
+                    ctx.fillStyle = s.hitFlash > 0 ? "#fff" : "#ff3131";
+                    ctx.fillRect(xPos - spriteSize/4, horizon - spriteSize/2, spriteSize/2, spriteSize);
+                    ctx.fillStyle = "#111";
+                    ctx.fillRect(xPos - spriteSize/8, horizon, spriteSize/2, spriteSize/10);
+                    if (s.isFiring) {
+                        ctx.fillStyle = "#fff700";
+                        ctx.beginPath();
+                        ctx.arc(xPos + spriteSize/4, horizon + spriteSize/20, spriteSize/6, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.fillStyle = "#333"; ctx.fillRect(xPos - 20, horizon - spriteSize/2 - 15, 40, 5);
+                    ctx.fillStyle = "#00ff41"; ctx.fillRect(xPos - 20, horizon - spriteSize/2 - 15, 40 * (s.health/100), 5);
+                } else {
+                    let pSize = spriteSize / 8;
+                    ctx.fillStyle = "#ff0";
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = "#f00";
+                    ctx.beginPath();
+                    ctx.arc(xPos, horizon, pSize, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
             }
         }
     });
