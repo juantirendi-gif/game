@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halisco: Combat Ops - Armor Regen Protocol</title>
+    <title>Halisco: Combat Ops - Escalation Protocol</title>
     <style>
         :root {
             --tactical-green: #00ff41;
             --ui-bg: #050505;
             --damage-red: #ff3131;
             --regen-blue: #31d7ff;
+            --bone-white: #e0e0e0;
         }
 
         body {
@@ -34,11 +35,9 @@
             width: 800px;
             height: 400px;
             cursor: pointer;
-            /* Added transition for the blood border effect */
             transition: box-shadow 0.5s ease-in-out, border-color 0.5s;
         }
 
-        /* New class for the death state */
         .death-glow {
             border-color: var(--damage-red) !important;
             box-shadow: inset 0 0 100px #7a0000, 0 0 30px #ff0000 !important;
@@ -162,7 +161,7 @@
     <div id="control-panel">
         <div class="stat-group">
             <div class="label">Armor Integrity</div>
-            <div class="value" id="health-val">100%</div>
+            <div id="health-val" class="value">100%</div>
         </div>
         <div class="stat-group">
             <div class="label">Ammo</div>
@@ -170,11 +169,11 @@
         </div>
         <div class="stat-group">
             <div class="label">Wave</div>
-            <div class="value" id="wave-val">1 / 5</div>
+            <div id="wave-val" class="value">1 / 5</div>
         </div>
         <div class="stat-group">
             <div class="label">Kills (Wave)</div>
-            <div class="value" id="kills-val">0 / 10</div>
+            <div id="kills-val" class="value">0 / 10</div>
         </div>
         <div class="stat-group">
             <div class="label">Status</div>
@@ -201,7 +200,7 @@ let projectiles = [];
 let wave = 1;
 let killsInWave = 0;
 let enemiesSpawnedInWave = 0;
-const ENEMIES_PER_WAVE = 10;
+const BASE_ENEMIES = 10; // Initial enemies for Wave 1
 const MAX_WAVES = 5;
 const MAP_SIZE = 16;
 const zBuffer = new Array(canvas.width);
@@ -215,6 +214,11 @@ const player = {
 
 const keys = {};
 
+// Helper to calculate total enemies for the current wave
+function getEnemiesForWave(w) {
+    return BASE_ENEMIES + ((w - 1) * 5);
+}
+
 function showNotification(text, color = "var(--tactical-green)") {
     notify.innerText = text;
     notify.style.color = color;
@@ -223,10 +227,8 @@ function showNotification(text, color = "var(--tactical-green)") {
 }
 
 function startNewGame() {
-    // Reset effects
     gameContainer.classList.remove('death-glow');
     overlayTitle.style.color = "var(--tactical-green)";
-    
     wave = 1;
     killsInWave = 0;
     enemiesSpawnedInWave = 0;
@@ -237,10 +239,8 @@ function startNewGame() {
     player.lastDamageTime = Date.now();
     enemies = [];
     projectiles = [];
-    
     generateMap();
     startWave();
-    
     gameState = 'playing';
     overlay.style.display = 'none';
     weaponWrap.style.display = 'block';
@@ -253,15 +253,14 @@ function startWave() {
     enemiesSpawnedInWave = 0;
     enemies = [];
     showNotification(`WAVE ${wave} ARRIVING`);
-    for(let i=0; i<4; i++) spawnEnemy();
+    // Spawn up to 6 initially to handle the increased counts
+    for(let i=0; i<6; i++) spawnEnemy();
 }
 
 function updateUI() {
     const healthEl = document.getElementById('health-val');
     const statusEl = document.getElementById('status-val');
-    
     healthEl.innerText = Math.floor(player.health) + "%";
-    
     if (player.health > 60) healthEl.style.color = "var(--tactical-green)";
     else if (player.health > 30) healthEl.style.color = "yellow";
     else healthEl.style.color = "var(--damage-red)";
@@ -273,10 +272,9 @@ function updateUI() {
         statusEl.innerText = "ACTIVE";
         statusEl.style.color = "var(--tactical-green)";
     }
-
     document.getElementById('ammo-val').innerText = `${player.ammo} / 30`;
     document.getElementById('wave-val').innerText = `${wave} / ${MAX_WAVES}`;
-    document.getElementById('kills-val').innerText = `${killsInWave} / ${ENEMIES_PER_WAVE}`;
+    document.getElementById('kills-val').innerText = `${killsInWave} / ${getEnemiesForWave(wave)}`;
 }
 
 function generateMap() {
@@ -291,7 +289,7 @@ function generateMap() {
 }
 
 function spawnEnemy() {
-    if (enemiesSpawnedInWave >= ENEMIES_PER_WAVE) return;
+    if (enemiesSpawnedInWave >= getEnemiesForWave(wave)) return;
     let ex, ey;
     do {
         ex = Math.random() * (MAP_SIZE - 2) + 1;
@@ -381,11 +379,12 @@ function shoot() {
         }
     });
     enemies = enemies.filter(en => en.health > 0);
-    while(enemies.length < 4 && enemiesSpawnedInWave < ENEMIES_PER_WAVE) spawnEnemy();
+    // Keep map populated (max 6 active enemies at once)
+    while(enemies.length < 6 && enemiesSpawnedInWave < getEnemiesForWave(wave)) spawnEnemy();
 }
 
 function checkWaveProgress() {
-    if (killsInWave >= ENEMIES_PER_WAVE) {
+    if (killsInWave >= getEnemiesForWave(wave)) {
         if (wave < MAX_WAVES) {
             showNotification(`WAVE ${wave} COMPLETE`, "#fff");
             wave++;
@@ -413,9 +412,7 @@ function handleRegeneration() {
 
 function update() {
     if (gameState !== 'playing') return;
-
     handleRegeneration();
-
     let mx = 0, my = 0;
     if (keys['KeyW']) { mx += Math.cos(player.dir) * player.speed; my += Math.sin(player.dir) * player.speed; }
     if (keys['KeyS']) { mx -= Math.cos(player.dir) * player.speed; my -= Math.sin(player.dir) * player.speed; }
@@ -437,16 +434,11 @@ function update() {
             gameContainer.style.boxShadow = "inset 0 0 50px #ff0000";
             setTimeout(() => { if(gameState === 'playing') gameContainer.style.boxShadow = "none"; }, 100);
             projectiles.splice(i, 1);
-            
             if (player.health <= 0) {
                 gameState = 'over';
                 document.exitPointerLock();
-                
-                // Trigger the red border effect
                 gameContainer.classList.add('death-glow');
-                
                 overlay.style.display = 'flex';
-                // Custom death text requested
                 overlayTitle.innerText = "YOUR DEAD";
                 overlayTitle.style.color = "var(--damage-red)";
                 overlaySub.innerText = "CLICK TO RETRY";
@@ -525,16 +517,25 @@ function draw() {
         if (Math.abs(spriteAngle) < fov) {
             let spriteSize = canvas.height / (dist * Math.cos(spriteAngle));
             let xPos = (0.5 * (spriteAngle / (fov / 2)) + 0.5) * canvas.width;
+            
             if (dist < zBuffer[Math.floor(xPos)] + 0.3) {
                 if (s.type === 'enemy') {
-                    ctx.fillStyle = s.hitFlash > 0 ? "#fff" : "#ff3131";
-                    ctx.fillRect(xPos - spriteSize/4, horizon - spriteSize/2, spriteSize/2, spriteSize);
-                    ctx.fillStyle = "#111";
-                    ctx.fillRect(xPos - spriteSize/8, horizon, spriteSize/2, spriteSize/10);
+                    ctx.fillStyle = s.hitFlash > 0 ? "#fff" : "#e0e0e0";
+                    ctx.fillRect(xPos - spriteSize/8, horizon - spriteSize/2, spriteSize/4, spriteSize/4);
+                    ctx.fillRect(xPos - spriteSize/6, horizon - spriteSize/5, spriteSize/3, spriteSize/4);
+                    ctx.fillRect(xPos - spriteSize/20, horizon - spriteSize/5, spriteSize/10, spriteSize/2);
+                    ctx.fillRect(xPos - spriteSize/4, horizon - spriteSize/6, spriteSize/10, spriteSize/3);
+                    ctx.fillRect(xPos + spriteSize/6, horizon - spriteSize/6, spriteSize/10, spriteSize/3);
+                    ctx.fillRect(xPos - spriteSize/8, horizon + spriteSize/4, spriteSize/4, spriteSize/10);
+                    ctx.fillRect(xPos - spriteSize/8, horizon + spriteSize/4, spriteSize/15, spriteSize/4);
+                    ctx.fillRect(xPos + spriteSize/15, horizon + spriteSize/4, spriteSize/15, spriteSize/4);
+                    ctx.fillStyle = "#ff0000";
+                    ctx.fillRect(xPos - spriteSize/12, horizon - spriteSize/2.2, spriteSize/30, spriteSize/30);
+                    ctx.fillRect(xPos + spriteSize/25, horizon - spriteSize/2.2, spriteSize/30, spriteSize/30);
                     if (s.isFiring) {
                         ctx.fillStyle = "#fff700";
                         ctx.beginPath();
-                        ctx.arc(xPos + spriteSize/4, horizon + spriteSize/20, spriteSize/6, 0, Math.PI * 2);
+                        ctx.arc(xPos + spriteSize/4, horizon, spriteSize/10, 0, Math.PI * 2);
                         ctx.fill();
                     }
                     ctx.fillStyle = "#333"; ctx.fillRect(xPos - 20, horizon - spriteSize/2 - 15, 40, 5);
