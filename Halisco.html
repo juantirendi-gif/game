@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halisco: Combat Ops - Escalation Protocol</title>
+    <title>Halisco: Boss Protocol - 1000 HP & Regen</title>
     <style>
         :root {
             --tactical-green: #00ff41;
@@ -81,10 +81,10 @@
             position: absolute;
             top: 20%; left: 50%;
             transform: translateX(-50%);
-            font-size: 2rem;
+            font-size: 3rem;
             font-weight: bold;
             text-align: center;
-            text-shadow: 0 0 10px #000;
+            text-shadow: 0 0 20px #000;
             z-index: 50;
             display: none;
             pointer-events: none;
@@ -169,7 +169,7 @@
         </div>
         <div class="stat-group">
             <div class="label">Wave</div>
-            <div id="wave-val" class="value">1 / 5</div>
+            <div id="wave-val" class="value">1 / 4</div>
         </div>
         <div class="stat-group">
             <div class="label">Kills (Wave)</div>
@@ -200,8 +200,9 @@ let projectiles = [];
 let wave = 1;
 let killsInWave = 0;
 let enemiesSpawnedInWave = 0;
-const BASE_ENEMIES = 10; // Initial enemies for Wave 1
-const MAX_WAVES = 5;
+let screenShakeTime = 0;
+const BASE_ENEMIES = 10;
+const MAX_WAVES = 4;
 const MAP_SIZE = 16;
 const zBuffer = new Array(canvas.width);
 
@@ -214,9 +215,17 @@ const player = {
 
 const keys = {};
 
-// Helper to calculate total enemies for the current wave
 function getEnemiesForWave(w) {
+    if (w === 4) return 1;
     return BASE_ENEMIES + ((w - 1) * 5);
+}
+
+function triggerVoice(text) {
+    const speech = new SpeechSynthesisUtterance(text);
+    speech.rate = 1.1; 
+    speech.pitch = 0.7; 
+    speech.volume = 0.5;
+    window.speechSynthesis.speak(speech);
 }
 
 function showNotification(text, color = "var(--tactical-green)") {
@@ -228,7 +237,6 @@ function showNotification(text, color = "var(--tactical-green)") {
 
 function startNewGame() {
     gameContainer.classList.remove('death-glow');
-    overlayTitle.style.color = "var(--tactical-green)";
     wave = 1;
     killsInWave = 0;
     enemiesSpawnedInWave = 0;
@@ -236,6 +244,7 @@ function startNewGame() {
     player.ammo = 30;
     player.x = 2.5; player.y = 2.5;
     player.dir = 0;
+    player.pitch = 0;
     player.lastDamageTime = Date.now();
     enemies = [];
     projectiles = [];
@@ -252,43 +261,19 @@ function startWave() {
     killsInWave = 0;
     enemiesSpawnedInWave = 0;
     enemies = [];
-    showNotification(`WAVE ${wave} ARRIVING`);
-    // Spawn up to 6 initially to handle the increased counts
-    for(let i=0; i<6; i++) spawnEnemy();
-}
-
-function updateUI() {
-    const healthEl = document.getElementById('health-val');
-    const statusEl = document.getElementById('status-val');
-    healthEl.innerText = Math.floor(player.health) + "%";
-    if (player.health > 60) healthEl.style.color = "var(--tactical-green)";
-    else if (player.health > 30) healthEl.style.color = "yellow";
-    else healthEl.style.color = "var(--damage-red)";
-
-    if (Date.now() - player.lastDamageTime > 6000 && player.health < 100) {
-        statusEl.innerText = "REGEN";
-        statusEl.style.color = "var(--regen-blue)";
+    
+    if (wave === 4) {
+        showNotification("BOSS FIGHT", "var(--damage-red)");
+        triggerVoice("Extreme threat detected. Boss fight initiated.");
+        screenShakeTime = 300; 
+        spawnEnemy(true);
     } else {
-        statusEl.innerText = "ACTIVE";
-        statusEl.style.color = "var(--tactical-green)";
+        showNotification(`WAVE ${wave} ARRIVING`);
+        for(let i=0; i<6; i++) spawnEnemy();
     }
-    document.getElementById('ammo-val').innerText = `${player.ammo} / 30`;
-    document.getElementById('wave-val').innerText = `${wave} / ${MAX_WAVES}`;
-    document.getElementById('kills-val').innerText = `${killsInWave} / ${getEnemiesForWave(wave)}`;
 }
 
-function generateMap() {
-    worldMap = Array.from({length: MAP_SIZE}, () => Array(MAP_SIZE).fill(0));
-    for (let y = 0; y < MAP_SIZE; y++) {
-        for (let x = 0; x < MAP_SIZE; x++) {
-            if (x === 0 || x === MAP_SIZE-1 || y === 0 || y === MAP_SIZE-1) worldMap[y][x] = 1;
-            else if (Math.random() < 0.15) worldMap[y][x] = Math.random() > 0.5 ? 1 : 2;
-        }
-    }
-    worldMap[2][2] = 0; worldMap[3][2] = 0; worldMap[2][3] = 0;
-}
-
-function spawnEnemy() {
+function spawnEnemy(isBoss = false) {
     if (enemiesSpawnedInWave >= getEnemiesForWave(wave)) return;
     let ex, ey;
     do {
@@ -297,58 +282,86 @@ function spawnEnemy() {
     } while (worldMap[Math.floor(ey)][Math.floor(ex)] !== 0 || Math.hypot(ex-player.x, ey-player.y) < 5);
     
     enemies.push({ 
-        x: ex, y: ey, health: 100, 
+        x: ex, y: ey, 
+        health: isBoss ? 1000 : 100, 
+        maxHealth: isBoss ? 1000 : 100,
         lastShot: Date.now() + (Math.random() * 2000), 
-        hitFlash: 0, isFiring: false 
+        hitFlash: 0, 
+        isFiring: false,
+        isBoss: isBoss,
+        scale: isBoss ? 2.0 : 1.0 
     });
     enemiesSpawnedInWave++;
 }
 
-document.addEventListener('mousedown', (e) => {
-    if (e.button === 0) {
-        if (gameState === 'menu' || gameState === 'over' || gameState === 'win') {
-            startNewGame();
-            canvas.requestPointerLock();
-        } else if (gameState === 'playing') {
-            if (document.pointerLockElement !== canvas) {
-                canvas.requestPointerLock();
-            } else {
-                shoot();
-            }
+function updateUI() {
+    const healthEl = document.getElementById('health-val');
+    const statusEl = document.getElementById('status-val');
+    healthEl.innerText = Math.floor(player.health) + "%";
+
+    // --- REGEN UI LOGIC ---
+    if (Date.now() - player.lastDamageTime > 6000 && player.health < 100) {
+        statusEl.innerText = "REGEN";
+        statusEl.style.color = "var(--regen-blue)";
+    } else {
+        statusEl.innerText = "ACTIVE";
+        statusEl.style.color = "var(--tactical-green)";
+    }
+
+    document.getElementById('ammo-val').innerText = `${player.ammo} / 30`;
+    document.getElementById('wave-val').innerText = `${wave} / ${MAX_WAVES}`;
+    document.getElementById('kills-val').innerText = `${killsInWave} / ${getEnemiesForWave(wave)}`;
+}
+
+// Logic for handling the 6-second cooldown heal
+function handleRegeneration() {
+    const now = Date.now();
+    if (now - player.lastDamageTime > 6000) {
+        if (player.health < 100 && now - player.lastRegenTick > 1000) {
+            player.health = Math.min(100, player.health + 5); // Heal 5% per second
+            player.lastRegenTick = now;
+            updateUI();
         }
     }
-});
-
-document.addEventListener('mousemove', (e) => {
-    if (document.pointerLockElement === canvas && gameState === 'playing') {
-        player.dir += e.movementX * 0.0025;
-        player.pitch = Math.max(-150, Math.min(150, player.pitch - e.movementY * 0.8));
-        weaponWrap.style.transform = `translateX(-50%) translateY(${player.pitch * -0.15}px)`;
-    }
-});
-
-window.addEventListener('keydown', e => { 
-    keys[e.code] = true; 
-    if (e.code === 'KeyR' && gameState === 'playing') reload(); 
-});
-window.addEventListener('keyup', e => keys[e.code] = false);
+}
 
 function reload() {
     if (player.reloading || player.ammo === 30) return;
     player.reloading = true;
-    weaponWrap.style.transform = 'translateX(-50%) translateY(250px)';
+    triggerVoice("Reloading");
+    const startPitch = player.pitch * -0.15;
+    weaponWrap.style.transition = "transform 0.3s ease-in";
+    weaponWrap.style.transform = `translateX(-50%) translateY(${300 + startPitch}px) rotate(15deg)`;
     setTimeout(() => {
-        player.ammo = 30;
-        updateUI();
-        weaponWrap.style.transform = `translateX(-50%) translateY(${player.pitch * -0.15}px)`;
-        player.reloading = false;
-    }, 1200);
+        weaponWrap.style.transform = `translateX(-50%) translateY(${280 + startPitch}px) rotate(-5deg)`;
+        setTimeout(() => {
+            player.ammo = 30;
+            updateUI();
+            const endPitch = player.pitch * -0.15;
+            weaponWrap.style.transition = "transform 0.2s ease-out";
+            weaponWrap.style.transform = `translateX(-50%) translateY(${endPitch}px) rotate(0deg)`;
+            setTimeout(() => {
+                weaponWrap.style.transition = "transform 0.1s ease-out";
+                player.reloading = false;
+            }, 200);
+        }, 400);
+    }, 300);
 }
 
 function shoot() {
     if (player.ammo <= 0 || player.reloading) return;
     player.ammo--;
     updateUI();
+    player.pitch += 12; 
+    
+    const currentPitchOffset = player.pitch * -0.15;
+    weaponWrap.style.transition = "none";
+    weaponWrap.style.transform = `translateX(-50%) translateY(${currentPitchOffset + 15}px) scale(1.05)`;
+    setTimeout(() => {
+        weaponWrap.style.transition = "transform 0.1s ease-out";
+        weaponWrap.style.transform = `translateX(-50%) translateY(${player.pitch * -0.15}px) scale(1)`;
+    }, 50);
+
     muzzle.style.display = 'block';
     setTimeout(() => muzzle.style.display = 'none', 50);
 
@@ -360,7 +373,8 @@ function shoot() {
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
         
         let dist = Math.hypot(dx, dy);
-        if (Math.abs(angleDiff) < 0.15 && dist < 15) {
+        let hitBox = en.isBoss ? 0.4 : 0.15; 
+        if (Math.abs(angleDiff) < hitBox && dist < 15) {
             let clearShot = true;
             for(let d=0; d<dist; d+=0.2) {
                 if(worldMap[Math.floor(player.y + Math.sin(angleToEn)*d)][Math.floor(player.x + Math.cos(angleToEn)*d)] > 0) {
@@ -379,8 +393,7 @@ function shoot() {
         }
     });
     enemies = enemies.filter(en => en.health > 0);
-    // Keep map populated (max 6 active enemies at once)
-    while(enemies.length < 6 && enemiesSpawnedInWave < getEnemiesForWave(wave)) spawnEnemy();
+    if (wave < 4) while(enemies.length < 6 && enemiesSpawnedInWave < getEnemiesForWave(wave)) spawnEnemy();
 }
 
 function checkWaveProgress() {
@@ -394,25 +407,38 @@ function checkWaveProgress() {
             document.exitPointerLock();
             overlay.style.display = 'flex';
             overlayTitle.innerText = "MISSION SUCCESS";
-            overlaySub.innerText = "ALL THREATS NEUTRALIZED. CLICK TO REPLAY.";
+            overlayTitle.style.color = "var(--tactical-green)";
+            overlaySub.innerText = "BOSS NEUTRALIZED. CLICK TO REPLAY.";
         }
     }
 }
 
-function handleRegeneration() {
-    const now = Date.now();
-    if (now - player.lastDamageTime > 6000) {
-        if (player.health < 100 && now - player.lastRegenTick > 1000) {
-            player.health = Math.min(100, player.health + 5);
-            player.lastRegenTick = now;
-            updateUI();
+function generateMap() {
+    worldMap = Array.from({length: MAP_SIZE}, () => Array(MAP_SIZE).fill(0));
+    for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) {
+            if (x === 0 || x === MAP_SIZE-1 || y === 0 || y === MAP_SIZE-1) worldMap[y][x] = 1;
+            else if (Math.random() < 0.15) worldMap[y][x] = Math.random() > 0.5 ? 1 : 2;
         }
     }
+    worldMap[2][2] = 0; worldMap[3][2] = 0; worldMap[2][3] = 0;
 }
 
 function update() {
     if (gameState !== 'playing') return;
+    
     handleRegeneration();
+
+    if (player.pitch > 0) player.pitch *= 0.92;
+    if (player.pitch < 0) player.pitch *= 0.92;
+
+    if (screenShakeTime > 0) {
+        screenShakeTime--;
+        canvas.style.transform = `translate(${(Math.random()-0.5)*12}px, ${(Math.random()-0.5)*12}px)`;
+    } else {
+        canvas.style.transform = `translate(0,0)`;
+    }
+
     let mx = 0, my = 0;
     if (keys['KeyW']) { mx += Math.cos(player.dir) * player.speed; my += Math.sin(player.dir) * player.speed; }
     if (keys['KeyS']) { mx -= Math.cos(player.dir) * player.speed; my -= Math.sin(player.dir) * player.speed; }
@@ -426,22 +452,17 @@ function update() {
         let p = projectiles[i];
         p.x += p.vx; p.y += p.vy;
         if (worldMap[Math.floor(p.y)][Math.floor(p.x)] > 0) { projectiles.splice(i, 1); continue; }
-        let distToPlayer = Math.hypot(p.x - player.x, p.y - player.y);
-        if (distToPlayer < 0.3) {
+        if (Math.hypot(p.x - player.x, p.y - player.y) < 0.3) {
             player.health -= 10;
-            player.lastDamageTime = Date.now();
+            player.lastDamageTime = Date.now(); // Reset regen timer
             updateUI();
-            gameContainer.style.boxShadow = "inset 0 0 50px #ff0000";
-            setTimeout(() => { if(gameState === 'playing') gameContainer.style.boxShadow = "none"; }, 100);
             projectiles.splice(i, 1);
             if (player.health <= 0) {
                 gameState = 'over';
                 document.exitPointerLock();
-                gameContainer.classList.add('death-glow');
                 overlay.style.display = 'flex';
                 overlayTitle.innerText = "YOUR DEAD";
                 overlayTitle.style.color = "var(--damage-red)";
-                overlaySub.innerText = "CLICK TO RETRY";
             }
             continue;
         }
@@ -452,33 +473,29 @@ function update() {
     enemies.forEach(en => {
         let dist = Math.hypot(player.x - en.x, player.y - en.y);
         if (en.hitFlash > 0) en.hitFlash--;
-        if (dist < 10) { 
-            let ang = Math.atan2(player.y - en.y, player.x - en.x);
-            if (dist > 3) {
-                let nex = en.x + Math.cos(ang) * 0.02;
-                let ney = en.y + Math.sin(ang) * 0.02;
-                if (worldMap[Math.floor(ney)][Math.floor(nex)] === 0) { en.x = nex; en.y = ney; }
-            }
-            if (Date.now() - en.lastShot > (3000 - (wave * 200))) {
-                en.isFiring = true;
-                en.lastShot = Date.now();
-                projectiles.push({
-                    x: en.x, y: en.y,
-                    vx: Math.cos(ang) * 0.12, vy: Math.sin(ang) * 0.12,
-                    life: 100
-                });
-                setTimeout(() => en.isFiring = false, 150);
-            }
+        let ang = Math.atan2(player.y - en.y, player.x - en.x);
+        let speed = en.isBoss ? 0.015 : 0.02;
+        if (dist > 2) {
+            let nex = en.x + Math.cos(ang) * speed;
+            let ney = en.y + Math.sin(ang) * speed;
+            if (worldMap[Math.floor(ney)][Math.floor(nex)] === 0) { en.x = nex; en.y = ney; }
+        }
+        let fireRate = en.isBoss ? 800 : (3000 - (wave * 200));
+        if (Date.now() - en.lastShot > fireRate) {
+            en.isFiring = true;
+            en.lastShot = Date.now();
+            projectiles.push({
+                x: en.x, y: en.y,
+                vx: Math.cos(ang) * 0.15, vy: Math.sin(ang) * 0.15,
+                life: 150
+            });
+            setTimeout(() => en.isFiring = false, 150);
         }
     });
 }
 
 function draw() {
-    if (gameState === 'menu') {
-        ctx.fillStyle = "#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
-        return;
-    }
-
+    if (gameState === 'menu') return;
     const horizon = 200 + player.pitch;
     ctx.fillStyle = "#111"; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#1a2a3a"; ctx.fillRect(0, 0, canvas.width, horizon);
@@ -501,10 +518,7 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(i, horizon - h/2); ctx.lineTo(i, horizon + h/2); ctx.stroke();
     }
 
-    let sprites = [
-        ...enemies.map(e => ({...e, type: 'enemy'})),
-        ...projectiles.map(p => ({...p, type: 'projectile'}))
-    ];
+    let sprites = [...enemies.map(e => ({...e, type: 'enemy'})), ...projectiles.map(p => ({...p, type: 'projectile'}))];
     sprites.sort((a,b) => Math.hypot(b.x-player.x, b.y-player.y) - Math.hypot(a.x-player.x, a.y-player.y));
 
     sprites.forEach(s => {
@@ -515,45 +529,59 @@ function draw() {
         while(spriteAngle > Math.PI) spriteAngle -= Math.PI * 2;
 
         if (Math.abs(spriteAngle) < fov) {
-            let spriteSize = canvas.height / (dist * Math.cos(spriteAngle));
+            let spriteSize = (canvas.height / (dist * Math.cos(spriteAngle))) * (s.scale || 1);
             let xPos = (0.5 * (spriteAngle / (fov / 2)) + 0.5) * canvas.width;
             
-            if (dist < zBuffer[Math.floor(xPos)] + 0.3) {
+            if (dist < zBuffer[Math.floor(xPos)] + 0.5) {
                 if (s.type === 'enemy') {
-                    ctx.fillStyle = s.hitFlash > 0 ? "#fff" : "#e0e0e0";
+                    if (s.isBoss) {
+                        ctx.fillStyle = `rgba(255, ${100 + Math.random()*155}, 0, 0.7)`;
+                        for(let f=0; f<8; f++) {
+                            ctx.fillRect(xPos - spriteSize/2.5 + Math.random()*spriteSize/1.2, horizon - spriteSize/1.4 - Math.random()*30, spriteSize/10, spriteSize/3);
+                        }
+                    }
+
+                    ctx.fillStyle = s.hitFlash > 0 ? "#fff" : (s.isBoss ? "#666" : "#e0e0e0"); 
                     ctx.fillRect(xPos - spriteSize/8, horizon - spriteSize/2, spriteSize/4, spriteSize/4);
-                    ctx.fillRect(xPos - spriteSize/6, horizon - spriteSize/5, spriteSize/3, spriteSize/4);
                     ctx.fillRect(xPos - spriteSize/20, horizon - spriteSize/5, spriteSize/10, spriteSize/2);
                     ctx.fillRect(xPos - spriteSize/4, horizon - spriteSize/6, spriteSize/10, spriteSize/3);
                     ctx.fillRect(xPos + spriteSize/6, horizon - spriteSize/6, spriteSize/10, spriteSize/3);
-                    ctx.fillRect(xPos - spriteSize/8, horizon + spriteSize/4, spriteSize/4, spriteSize/10);
-                    ctx.fillRect(xPos - spriteSize/8, horizon + spriteSize/4, spriteSize/15, spriteSize/4);
-                    ctx.fillRect(xPos + spriteSize/15, horizon + spriteSize/4, spriteSize/15, spriteSize/4);
+                    
                     ctx.fillStyle = "#ff0000";
                     ctx.fillRect(xPos - spriteSize/12, horizon - spriteSize/2.2, spriteSize/30, spriteSize/30);
                     ctx.fillRect(xPos + spriteSize/25, horizon - spriteSize/2.2, spriteSize/30, spriteSize/30);
-                    if (s.isFiring) {
-                        ctx.fillStyle = "#fff700";
-                        ctx.beginPath();
-                        ctx.arc(xPos + spriteSize/4, horizon, spriteSize/10, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                    ctx.fillStyle = "#333"; ctx.fillRect(xPos - 20, horizon - spriteSize/2 - 15, 40, 5);
-                    ctx.fillStyle = "#00ff41"; ctx.fillRect(xPos - 20, horizon - spriteSize/2 - 15, 40 * (s.health/100), 5);
+
+                    ctx.fillStyle = "#333"; ctx.fillRect(xPos - 40, horizon - spriteSize/2 - 25, 80, 6);
+                    ctx.fillStyle = s.isBoss ? "#ff4500" : "#00ff41"; 
+                    ctx.fillRect(xPos - 40, horizon - spriteSize/2 - 25, 80 * (s.health / s.maxHealth), 6);
                 } else {
-                    let pSize = spriteSize / 8;
                     ctx.fillStyle = "#ff0";
-                    ctx.shadowBlur = 10;
-                    ctx.shadowColor = "#f00";
-                    ctx.beginPath();
-                    ctx.arc(xPos, horizon, pSize, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
+                    ctx.beginPath(); ctx.arc(xPos, horizon, spriteSize/10, 0, Math.PI * 2); ctx.fill();
                 }
             }
         }
     });
 }
+
+document.addEventListener('mousedown', (e) => {
+    if (gameState !== 'playing') startNewGame();
+    else if (document.pointerLockElement === canvas) shoot();
+    else canvas.requestPointerLock();
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (document.pointerLockElement === canvas && gameState === 'playing') {
+        player.dir += e.movementX * 0.0025;
+        player.pitch = Math.max(-150, Math.min(150, player.pitch - e.movementY * 0.8));
+        if (!player.reloading) weaponWrap.style.transform = `translateX(-50%) translateY(${player.pitch * -0.15}px)`;
+    }
+});
+
+window.addEventListener('keydown', e => { 
+    keys[e.code] = true; 
+    if (e.code === 'KeyR' && gameState === 'playing') reload(); 
+});
+window.addEventListener('keyup', e => keys[e.code] = false);
 
 function loop() { update(); draw(); requestAnimationFrame(loop); }
 loop();
