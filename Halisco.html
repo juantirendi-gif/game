@@ -197,7 +197,6 @@
             letter-spacing: 1px;
         }
 
-        /* --- NEW BOTTOM MIDDLE WEAPON SWAP HUD --- */
         #bottom-middle-hud {
             position: absolute;
             bottom: 35px;
@@ -215,27 +214,27 @@
         }
 
         #swap-preview-circle {
-            width: 55px;
-            height: 55px;
+            width: 65px;
+            height: 65px;
             border: 2px solid var(--tactical-green);
             border-radius: 50%;
             background: rgba(15, 15, 15, 0.9);
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
+            box-shadow: 0 0 12px rgba(0, 255, 65, 0.25);
         }
 
         #swap-preview-circle svg {
-            width: 75%;
-            height: 75%;
+            width: 95%;
+            height: 95%;
         }
 
         #swap-text-prompt {
-            font-size: 1rem;
+            font-size: 0.78rem;
             font-weight: bold;
-            letter-spacing: 1.5px;
-            color: #888;
+            letter-spacing: 2px;
+            color: #777;
             text-transform: uppercase;
             white-space: nowrap;
         }
@@ -287,7 +286,6 @@
             pointer-events: none;
         }
 
-        /* Machete specific styles */
         .machete-blade {
             fill: #8a9597;
             stroke: #cbd5e1;
@@ -505,7 +503,6 @@ let isFiringContinuous = false;
 let lastAutoShotTime = 0;
 const AUTO_FIRE_RATE = 100; 
 
-// SVG UI Raw Strings for dynamically swapping rendering configurations
 const GUN_SVG_MARKUP = `
     <rect x="76" y="85" width="48" height="25" fill="#141416" stroke="#222" stroke-width="0.5" />
     <rect x="78" y="78" width="44" height="8" fill="#1c1c1f" />
@@ -546,7 +543,7 @@ const player = {
     lastRegenTick: 0,
     lastGrenadeTime: 0,
     grenadeCooldown: 10000,
-    currentWeapon: 'gun', // Options: 'gun', 'machete'
+    currentWeapon: 'gun',
     isMeleeSwinging: false
 };
 
@@ -737,11 +734,11 @@ function spawnEnemy(isBoss = false) {
 function renderEquippedWeapon() {
     if (player.currentWeapon === 'gun') {
         weaponSvg.innerHTML = GUN_SVG_MARKUP;
-        swapPreviewCircle.innerHTML = `<svg viewBox="0 0 200 200" style="transform: scale(0.9);">${MACHETE_SVG_MARKUP}</svg>`;
+        swapPreviewCircle.innerHTML = `<svg viewBox="0 0 200 200" style="transform: scale(1.15) translateY(5px);">${MACHETE_SVG_MARKUP}</svg>`;
         crosshair.innerText = "⌖";
     } else {
         weaponSvg.innerHTML = MACHETE_SVG_MARKUP;
-        swapPreviewCircle.innerHTML = `<svg viewBox="0 0 200 200" style="transform: scale(0.65) translateY(10px);">${GUN_SVG_MARKUP}</svg>`;
+        swapPreviewCircle.innerHTML = `<svg viewBox="0 0 200 200" style="transform: scale(0.9) translateY(12px);">${GUN_SVG_MARKUP}</svg>`;
         crosshair.innerText = "✧";
     }
 }
@@ -752,7 +749,6 @@ function switchWeapon() {
     player.currentWeapon = (player.currentWeapon === 'gun') ? 'machete' : 'gun';
     isFiringContinuous = false;
     
-    // Quick draw animation
     const pitchOffset = player.pitch * -0.15;
     weaponWrap.style.transition = "transform 0.15s ease-in";
     weaponWrap.style.transform = `translateX(-50%) translateY(${250 + pitchOffset}px)`;
@@ -949,7 +945,7 @@ function shoot() {
 
 function executeMacheteSwing() {
     player.isMeleeSwinging = true;
-    isFiringContinuous = false; // Turn off trigger down mapping to enforce single clicks
+    isFiringContinuous = false;
 
     const pitchOffset = player.pitch * -0.15;
     weaponWrap.style.transition = "transform 0.08s cubic-bezier(0.15, 0.85, 0.35, 1.2)";
@@ -959,7 +955,6 @@ function executeMacheteSwing() {
         weaponWrap.style.transition = "transform 0.05s ease-in";
         weaponWrap.style.transform = `translateX(-70%) translateY(${pitchOffset + 40}px) rotate(-45deg) scale(1.1)`;
         
-        // Check structural slice collision at close range
         evaluateHitscanDamage(1.8, 50);
 
         setTimeout(() => {
@@ -972,38 +967,62 @@ function executeMacheteSwing() {
     }, 80);
 }
 
+/* --- UPDATED HITSCAN LOGIC FOR INDIVIDUAL HITBOXES --- */
 function evaluateHitscanDamage(maxRange, damageAmount) {
+    let closestEnemy = null;
+    let closestDistance = maxRange;
+
     enemies.forEach(en => {
         if (en.isDying) return; 
 
         let dx = en.x - player.x, dy = en.y - player.y;
         let angleToEn = Math.atan2(dy, dx);
         let angleDiff = angleToEn - player.dir;
+        
         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
         
         let dist = Math.hypot(dx, dy);
-        let hitBox = en.isBoss ? 0.4 : 0.22; 
-        if (Math.abs(angleDiff) < hitBox && dist < maxRange) {
+        let hitBoxWidth = en.isBoss ? 0.4 : 0.22; 
+
+        // Check if the enemy crosshair angle alignment falls directly into its personal hitbox bounding size
+        if (Math.abs(angleDiff) < hitBoxWidth && dist < closestDistance) {
+            
+            // Check world wall layout intersection to prevent shooting through solid blocks
             let clearShot = true;
-            for(let d=0; d<dist; d+=0.2) {
-                if(worldMap[Math.floor(player.y + Math.sin(angleToEn)*d)][Math.floor(player.x + Math.cos(angleToEn)*d)] > 0) {
-                    clearShot = false; break;
+            for(let d = 0.2; d < dist; d += 0.2) {
+                let checkX = Math.floor(player.x + Math.cos(angleToEn) * d);
+                let checkY = Math.floor(player.y + Math.sin(angleToEn) * d);
+                if(worldMap[checkY] && worldMap[checkY][checkX] > 0) {
+                    clearShot = false; 
+                    break;
                 }
             }
-            if(clearShot) {
-                en.health -= damageAmount; 
-                en.hitFlash = 3;
-                if(en.health <= 0) { 
-                    en.isDying = true;
-                    en.deathTimer = 30; 
-                    killsInWave++; 
-                    updateUI();
-                    checkWaveProgress();
-                }
+            
+            if (clearShot) {
+                closestEnemy = en;
+                closestDistance = dist;
             }
         }
     });
+
+    // Apply damage exclusively to the verified valid single closest enemy unit targeted
+    if (closestEnemy) {
+        if (player.currentWeapon === 'machete' && !closestEnemy.isBoss) {
+            closestEnemy.health = 0;
+        } else {
+            closestEnemy.health -= damageAmount;
+        }
+        
+        closestEnemy.hitFlash = 3;
+        if(closestEnemy.health <= 0) { 
+            closestEnemy.isDying = true;
+            closestEnemy.deathTimer = 30; 
+            killsInWave++; 
+            updateUI();
+            checkWaveProgress();
+        }
+    }
 }
 
 function throwGrenade() {
@@ -1434,7 +1453,7 @@ document.addEventListener('mousedown', (e) => {
             if (player.currentWeapon === 'gun') {
                 isFiringContinuous = true; 
             } else {
-                shoot(); // Fire manual slash for melee
+                shoot(); 
             }
         } else {
             canvas.requestPointerLock();
