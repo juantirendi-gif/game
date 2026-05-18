@@ -330,36 +330,36 @@
         }
 
         #overlay h1 {
-            font-size: 5rem;
+            font-size: 6.5rem;
             margin-top: 0;
-            margin-bottom: 1.5rem;
-            letter-spacing: 12px;
+            margin-bottom: 2rem;
+            letter-spacing: 16px;
             color: #d1c7bd;
-            text-shadow: 0 0 25px rgba(153, 0, 0, 0.8), 0 0 40px rgba(0, 0, 0, 0.9);
+            text-shadow: 0 0 35px rgba(153, 0, 0, 0.95), 0 0 50px rgba(0, 0, 0, 0.9);
             font-weight: 900;
         }
 
         #menu-options-container {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 20px;
             z-index: 105;
-            width: 320px;
+            width: 380px;
         }
 
         .menu-btn {
-            background: rgba(10, 5, 5, 0.6);
-            border: 1px solid #333;
-            color: #888;
-            padding: 12px 0;
+            background: rgba(10, 5, 5, 0.75);
+            border: 1px solid #444;
+            color: #999;
+            padding: 16px 0;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 1.1rem;
+            font-size: 1.25rem;
             font-weight: bold;
-            letter-spacing: 2px;
+            letter-spacing: 3px;
             text-transform: uppercase;
             cursor: pointer;
             transition: all 0.2s ease;
-            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            box-shadow: 0 0 10px rgba(0,0,0,0.6);
         }
 
         .menu-btn.active-mode {
@@ -368,20 +368,20 @@
         }
 
         .menu-btn.active-mode:hover {
-            background: rgba(0, 255, 65, 0.1);
-            box-shadow: 0 0 15px rgba(0, 255, 65, 0.4);
-            transform: scale(1.03);
+            background: rgba(0, 255, 65, 0.12);
+            box-shadow: 0 0 25px rgba(0, 255, 65, 0.5);
+            transform: scale(1.04);
         }
 
         .menu-btn.locked-mode {
-            color: #444;
-            border-color: #222;
+            color: #333;
+            border-color: #1a1a1a;
             cursor: not-allowed;
         }
 
         #death-notice-sub {
             z-index: 105;
-            font-size: 1.1rem;
+            font-size: 1.25rem;
             letter-spacing: 3px;
             text-shadow: 0 0 8px rgba(255, 49, 49, 0.4);
             color: var(--damage-red);
@@ -560,24 +560,25 @@ window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
 function createMenuParticle(initializeFullHeight = false) {
-    const isFire = Math.random() > 0.45; 
+    const isFire = Math.random() > 0.40; 
     return {
         type: isFire ? 'fire' : 'ash',
         x: Math.random() * pCanvas.width,
         y: initializeFullHeight ? (Math.random() * pCanvas.height) : (pCanvas.height + 15),
-        speed: isFire ? (0.8 + Math.random() * 1.4) : (0.3 + Math.random() * 0.6),
-        size: isFire ? (1.5 + Math.random() * 3) : (2 + Math.random() * 4),
-        maxSize: isFire ? 4 : 5,
+        speed: isFire ? (1.0 + Math.random() * 1.8) : (0.4 + Math.random() * 0.9),
+        size: isFire ? (2.0 + Math.random() * 4) : (2.5 + Math.random() * 5),
+        maxSize: isFire ? 5 : 6,
         driftFreq: Math.random() * 0.02,
         driftPhase: Math.random() * Math.PI * 2,
-        opacity: isFire ? (0.6 + Math.random() * 0.4) : (0.2 + Math.random() * 0.3),
-        hue: isFire ? (Math.random() > 0.3 ? Math.floor(15 + Math.random() * 25) : Math.floor(40 + Math.random() * 20)) : 0 
+        opacity: isFire ? (0.65 + Math.random() * 0.35) : (0.25 + Math.random() * 0.35),
+        hue: isFire ? (Math.random() > 0.25 ? Math.floor(12 + Math.random() * 23) : Math.floor(35 + Math.random() * 25)) : 0 
     };
 }
 
 function initMenuParticles() {
     menuAshArray = [];
-    for(let i = 0; i < 180; i++) {
+    // Increased particle count from 180 to 450 for significantly more atmospheric density
+    for(let i = 0; i < 450; i++) {
         menuAshArray.push(createMenuParticle(true));
     }
 }
@@ -590,18 +591,18 @@ function handleMenuParticles() {
 
     menuAshArray.forEach((p, idx) => {
         p.y -= p.speed;
-        p.x += Math.sin(p.y * p.driftFreq + p.driftPhase) * 0.4;
+        p.x += Math.sin(p.y * p.driftFreq + p.driftPhase) * 0.5;
 
         if (p.type === 'fire') {
-            p.size -= 0.006;
-            p.opacity -= 0.002;
+            p.size -= 0.008;
+            p.opacity -= 0.0025;
             
             if (p.y < -10 || p.size <= 0.2 || p.opacity <= 0) {
                 menuAshArray[idx] = createMenuParticle(false);
                 return;
             }
             
-            pctx.fillStyle = `hsla(${p.hue}, 100%, 50%, ${p.opacity * (0.7 + Math.random() * 0.3)})`;
+            pctx.fillStyle = `hsla(${p.hue}, 100%, 50%, ${p.opacity * (0.75 + Math.random() * 0.25)})`;
             pctx.fillRect(p.x, p.y, p.size, p.size);
         } else {
             if (p.y < -10) {
@@ -609,7 +610,7 @@ function handleMenuParticles() {
                 return;
             }
             
-            pctx.fillStyle = `rgba(90, 85, 85, ${p.opacity})`;
+            pctx.fillStyle = `rgba(110, 105, 105, ${p.opacity})`;
             pctx.fillRect(p.x, p.y, p.size, p.size);
         }
     });
@@ -649,7 +650,7 @@ function returnToMainMenu() {
 
     overlayTitle.innerText = "HALISCO";
     overlayTitle.style.color = "#d1c7bd";
-    overlayTitle.style.textShadow = "0 0 15px rgba(153, 0, 0, 0.8), 0 0 30px rgba(0, 0, 0, 0.9)";
+    overlayTitle.style.textShadow = "0 0 35px rgba(153, 0, 0, 0.95), 0 0 50px rgba(0, 0, 0, 0.9)";
 }
 
 function startNewGame() {
@@ -967,7 +968,6 @@ function executeMacheteSwing() {
     }, 80);
 }
 
-/* --- UPDATED HITSCAN LOGIC FOR INDIVIDUAL HITBOXES --- */
 function evaluateHitscanDamage(maxRange, damageAmount) {
     let closestEnemy = null;
     let closestDistance = maxRange;
@@ -985,10 +985,7 @@ function evaluateHitscanDamage(maxRange, damageAmount) {
         let dist = Math.hypot(dx, dy);
         let hitBoxWidth = en.isBoss ? 0.4 : 0.22; 
 
-        // Check if the enemy crosshair angle alignment falls directly into its personal hitbox bounding size
         if (Math.abs(angleDiff) < hitBoxWidth && dist < closestDistance) {
-            
-            // Check world wall layout intersection to prevent shooting through solid blocks
             let clearShot = true;
             for(let d = 0.2; d < dist; d += 0.2) {
                 let checkX = Math.floor(player.x + Math.cos(angleToEn) * d);
@@ -1006,7 +1003,6 @@ function evaluateHitscanDamage(maxRange, damageAmount) {
         }
     });
 
-    // Apply damage exclusively to the verified valid single closest enemy unit targeted
     if (closestEnemy) {
         if (player.currentWeapon === 'machete' && !closestEnemy.isBoss) {
             closestEnemy.health = 0;
