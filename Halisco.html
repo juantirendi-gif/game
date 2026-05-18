@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halisco: Boss Protocol - Mode Selection Menu</title>
+    <title>Halisco: Boss Protocol - Dark Depths</title>
     <style>
         :root {
             --tactical-green: #00ff41;
@@ -286,7 +286,6 @@
             font-weight: 900;
         }
 
-        /* Tactical Stacked Menu Options */
         #menu-options-container {
             display: flex;
             flex-direction: column;
@@ -474,17 +473,26 @@ const player = {
 
 const keys = {};
 
+function createMenuParticle(initializeFullHeight = false) {
+    const isFire = Math.random() > 0.45; 
+    return {
+        type: isFire ? 'fire' : 'ash',
+        x: Math.random() * pCanvas.width,
+        y: initializeFullHeight ? (Math.random() * pCanvas.height) : (pCanvas.height + 15),
+        speed: isFire ? (0.8 + Math.random() * 1.4) : (0.3 + Math.random() * 0.6),
+        size: isFire ? (1.5 + Math.random() * 3) : (2 + Math.random() * 4),
+        maxSize: isFire ? 4 : 5,
+        driftFreq: Math.random() * 0.02,
+        driftPhase: Math.random() * Math.PI * 2,
+        opacity: isFire ? (0.6 + Math.random() * 0.4) : (0.2 + Math.random() * 0.3),
+        hue: isFire ? (Math.random() > 0.3 ? Math.floor(15 + Math.random() * 25) : Math.floor(40 + Math.random() * 20)) : 0 
+    };
+}
+
 function initMenuParticles() {
     menuAshArray = [];
-    for(let i = 0; i < 40; i++) {
-        menuAshArray.push({
-            x: Math.random() * pCanvas.width,
-            y: Math.random() * pCanvas.height + pCanvas.height,
-            speed: 0.4 + Math.random() * 0.8,
-            size: 1 + Math.random() * 2.5,
-            drift: (Math.random() - 0.5) * 0.3,
-            color: Math.random() > 0.6 ? 'rgba(140, 30, 30, 0.4)' : 'rgba(100, 100, 100, 0.3)'
-        });
+    for(let i = 0; i < 180; i++) {
+        menuAshArray.push(createMenuParticle(true));
     }
 }
 initMenuParticles();
@@ -493,16 +501,35 @@ function handleMenuParticles() {
     if (gameState === 'playing') return;
     pctx.clearRect(0, 0, pCanvas.width, pCanvas.height);
     
-    menuAshArray.forEach(p => {
+    pctx.globalCompositeOperation = 'screen';
+
+    menuAshArray.forEach((p, idx) => {
         p.y -= p.speed;
-        p.x += p.drift;
-        if(p.y < -10) {
-            p.y = pCanvas.height + 10;
-            p.x = Math.random() * pCanvas.width;
+        p.x += Math.sin(p.y * p.driftFreq + p.driftPhase) * 0.4;
+
+        if (p.type === 'fire') {
+            p.size -= 0.006;
+            p.opacity -= 0.002;
+            
+            if (p.y < -10 || p.size <= 0.2 || p.opacity <= 0) {
+                menuAshArray[idx] = createMenuParticle(false);
+                return;
+            }
+            
+            pctx.fillStyle = `hsla(${p.hue}, 100%, 50%, ${p.opacity * (0.7 + Math.random() * 0.3)})`;
+            pctx.fillRect(p.x, p.y, p.size, p.size);
+        } else {
+            if (p.y < -10) {
+                menuAshArray[idx] = createMenuParticle(false);
+                return;
+            }
+            
+            pctx.fillStyle = `rgba(90, 85, 85, ${p.opacity})`;
+            pctx.fillRect(p.x, p.y, p.size, p.size);
         }
-        pctx.fillStyle = p.color;
-        pctx.fillRect(p.x, p.y, p.size, p.size);
     });
+
+    pctx.globalCompositeOperation = 'source-over';
 }
 
 function getEnemiesForWave(w) {
@@ -720,7 +747,6 @@ function checkGameOver() {
         bottomRightHUD.style.display = 'none';
         centerReloadHUD.style.display = 'none';
         
-        // Dynamic Swap: Hide setup menu options, show death confirmation prompt instead
         menuOptionsContainer.style.display = 'none';
         deathNoticeSub.style.display = 'block';
         deathNoticeSub.innerText = "click to go back to the main menu";
@@ -1031,10 +1057,14 @@ function drawMinimap() {
 
     const cellSize = minimapCanvas.width / MAP_SIZE;
 
-    mctx.fillStyle = "#222a22";
+    // Minimap rendering colors adjusted to match gameplay wall updates
     for (let y = 0; y < MAP_SIZE; y++) {
         for (let x = 0; x < MAP_SIZE; x++) {
-            if (worldMap[y][x] > 0) {
+            if (worldMap[y][x] === 1) {
+                mctx.fillStyle = "#3a1515"; // Dark red boundaries
+                mctx.fillRect(x * cellSize, y * cellSize, cellSize - 0.5, cellSize - 0.5);
+            } else if (worldMap[y][x] === 2) {
+                mctx.fillStyle = "#1e1e1e"; // Deep charcoal inner pillars
                 mctx.fillRect(x * cellSize, y * cellSize, cellSize - 0.5, cellSize - 0.5);
             }
         }
@@ -1073,8 +1103,8 @@ function drawMinimap() {
 function draw() {
     if (gameState === 'menu') return;
     const horizon = 200 + player.pitch;
-    ctx.fillStyle = "#111"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#1a2a3a"; ctx.fillRect(0, 0, canvas.width, horizon);
+    ctx.fillStyle = "#0a0a0d"; ctx.fillRect(0, 0, canvas.width, canvas.height); // Deep dark ground
+    ctx.fillStyle = "#120808"; ctx.fillRect(0, 0, canvas.width, horizon); // Distant dark red ambient horizon sky
 
     const fov = 1.1;
     for (let i = 0; i < canvas.width; i++) {
@@ -1089,8 +1119,18 @@ function draw() {
         }
         zBuffer[i] = dist * Math.cos(rayA - player.dir);
         let h = canvas.height / zBuffer[i];
-        let b = Math.max(0, 180 - (dist * 12));
-        ctx.strokeStyle = (hit === 1) ? `rgb(${b},${b},${b})` : `rgb(0,${b},0)`;
+        
+        // Wall Raycasting Shaders
+        if (hit === 1) {
+            // Type 1: Tactical Green shifted into Dark Crimson Red (shaded by distance falloff)
+            let rValue = Math.max(10, 140 - (dist * 10));
+            ctx.strokeStyle = `rgb(${rValue}, 12, 12)`;
+        } else {
+            // Type 2: Soft Grey shifted into a Deep Charcoal Grey (shaded by distance falloff)
+            let greyValue = Math.max(8, 70 - (dist * 5));
+            ctx.strokeStyle = `rgb(${greyValue}, ${greyValue}, ${greyValue})`;
+        }
+        
         ctx.beginPath(); ctx.moveTo(i, horizon - h/2); ctx.lineTo(i, horizon + h/2); ctx.stroke();
     }
 
@@ -1148,7 +1188,7 @@ function draw() {
                     ctx.fillRect(xPos - spriteSize/35, baseLine - spriteSize * 0.7 + collapseOffset, spriteSize/17.5, spriteSize/2);
                     
                     ctx.fillRect(xPos - spriteSize/5 - scatter, baseLine - spriteSize * 0.7 + collapseOffset, spriteSize/2.5, spriteSize/35); 
-                    ctx.fillRect(xPos - spriteSize/4.5 + scatter, baseLine - spriteSize * 0.61 + collapseOffset, spriteSize/2.25, spriteSize/35); 
+                    ctx.fillRect(xPos - spriteSize/4.4 + scatter, baseLine - spriteSize * 0.61 + collapseOffset, spriteSize/2.25, spriteSize/35); 
                     ctx.fillRect(xPos - spriteSize/5 - (scatter * 0.5), baseLine - spriteSize * 0.55 + collapseOffset, spriteSize/2.5, spriteSize/35); 
                     ctx.fillRect(xPos - spriteSize/6 + (scatter * 0.5), baseLine - spriteSize * 0.49 + collapseOffset, spriteSize/3, spriteSize/35); 
 
@@ -1226,9 +1266,8 @@ function draw() {
     drawMinimap();
 }
 
-// Option Interaction Routing
 btnUprising.addEventListener('click', (e) => {
-    e.stopPropagation(); // Block backdrop selection tracking
+    e.stopPropagation(); 
     if (gameState === 'menu') {
         startNewGame();
     }
