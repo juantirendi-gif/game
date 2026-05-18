@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halisco: Boss Protocol - Grenade System</title>
+    <title>Halisco: Boss Protocol - Reload Text HUD</title>
     <style>
         :root {
             --tactical-green: #00ff41;
@@ -198,6 +198,22 @@
             color: var(--damage-orange);
         }
 
+        /* Center Display Reload Interface Elements */
+        #center-reload-hud {
+            position: absolute;
+            top: 58%; /* Sits cleanly just beneath central crosshair marker */
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.1rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: var(--damage-orange);
+            text-shadow: 0 0 8px rgba(255, 153, 0, 0.6), 0 0 2px #000;
+            display: none;
+            pointer-events: none;
+            z-index: 35;
+        }
+
         #weapon-wrapper {
             position: absolute;
             bottom: -15px; left: 50%;
@@ -307,6 +323,8 @@
             <div id="cooldown-status" class="status-ready">GRENADE: READY</div>
         </div>
 
+        <div id="center-reload-hud">Reloading...</div>
+
         <div id="muzzle-flash"></div>
         <div id="crosshair">⌖</div>
         
@@ -351,6 +369,7 @@ const notify = document.getElementById('notification');
 const topHUD = document.getElementById('top-right-hud');
 const bottomLeftHUD = document.getElementById('bottom-left-hud');
 const bottomRightHUD = document.getElementById('bottom-right-hud');
+const centerReloadHUD = document.getElementById('center-reload-hud');
 const damageVignette = document.getElementById('damage-vignette');
 const cooldownStatus = document.getElementById('cooldown-status');
 
@@ -358,7 +377,7 @@ let gameState = 'menu';
 let worldMap = [];
 let enemies = [];
 let projectiles = [];
-let grenades = []; // Dynamic container tracking tracking active thrown ordinances
+let grenades = []; 
 let wave = 1;
 let killsInWave = 0;
 let enemiesSpawnedInWave = 0;
@@ -380,7 +399,7 @@ const player = {
     lastDamageTime: 0, 
     lastRegenTick: 0,
     lastGrenadeTime: 0,
-    grenadeCooldown: 10000 // 10-second processing window
+    grenadeCooldown: 10000 
 };
 
 const keys = {};
@@ -429,6 +448,7 @@ function startNewGame() {
     topHUD.style.display = 'flex';
     bottomLeftHUD.style.display = 'flex';
     bottomRightHUD.style.display = 'block';
+    centerReloadHUD.style.display = 'none';
     updateUI();
 }
 
@@ -522,7 +542,6 @@ function updateUI() {
     updateGrenadeHUD();
 }
 
-// Separate real-time renderer managing the grenade text updates cleanly
 function updateGrenadeHUD() {
     const now = Date.now();
     const timeElapsed = now - player.lastGrenadeTime;
@@ -576,6 +595,7 @@ function checkGameOver() {
         topHUD.style.display = 'none';
         bottomLeftHUD.style.display = 'none';
         bottomRightHUD.style.display = 'none';
+        centerReloadHUD.style.display = 'none';
         overlayTitle.innerText = "YOUR DEAD";
         overlayTitle.style.color = "var(--damage-red)";
     }
@@ -586,6 +606,10 @@ function reload() {
     player.reloading = true;
     isFiringContinuous = false; 
     triggerVoice("Reloading");
+    
+    // Toggle central indicator visibility
+    centerReloadHUD.style.display = 'block';
+
     const startPitch = player.pitch * -0.15;
     weaponWrap.style.transition = "transform 0.3s ease-in";
     weaponWrap.style.transform = `translateX(-50%) translateY(${300 + startPitch}px) rotate(15deg)`;
@@ -593,6 +617,10 @@ function reload() {
         weaponWrap.style.transform = `translateX(-50%) translateY(${280 + startPitch}px) rotate(-5deg)`;
         setTimeout(() => {
             player.ammo = 30;
+            
+            // Wipe central text layer on reload cycle absolute completion
+            centerReloadHUD.style.display = 'none';
+
             updateUI();
             const endPitch = player.pitch * -0.15;
             weaponWrap.style.transition = "transform 0.2s ease-out";
@@ -662,21 +690,19 @@ function shoot() {
     });
 }
 
-// Ability trigger calculation routine
 function throwGrenade() {
     const now = Date.now();
-    if (now - player.lastGrenadeTime < player.grenadeCooldown) return; // Cooldown locked
+    if (now - player.lastGrenadeTime < player.grenadeCooldown) return; 
 
     player.lastGrenadeTime = now;
     
-    // Calculate standard propulsion vectors matching current aim direction
     const launchForce = 0.12;
     grenades.push({
         x: player.x,
         y: player.y,
         vx: Math.cos(player.dir) * launchForce,
         vy: Math.sin(player.dir) * launchForce,
-        life: 45 // Detonation fuse frames (approx 0.75 seconds)
+        life: 45 
     });
     
     updateUI();
@@ -686,22 +712,19 @@ function processExplosion(gx, gy) {
     screenShakeTime = 25; 
     const blastRadius = 3.0;
     
-    // Check damage proximity relative to the player position
     const playerDist = Math.hypot(player.x - gx, player.y - gy);
     if (playerDist <= blastRadius) {
-        // Linearly scaled proximity damage calculation
         const damagePercentage = 1.0 - (playerDist / blastRadius);
         const playerDamage = Math.floor(damagePercentage * 60); 
         if (playerDamage > 5) registerPlayerDamage(playerDamage);
     }
 
-    // Process uniform high explosive blast output to local entities inside array
     enemies.forEach(en => {
         if (en.isDying) return;
         const enemyDist = Math.hypot(en.x - gx, en.y - gy);
         if (enemyDist <= blastRadius) {
             const damagePercentage = 1.0 - (enemyDist / blastRadius);
-            const explosiveDamage = Math.floor(damagePercentage * 250); // Scaled direct hit yields up to 250 DMG
+            const explosiveDamage = Math.floor(damagePercentage * 250); 
             
             if (explosiveDamage > 10) {
                 en.health -= explosiveDamage;
@@ -732,6 +755,7 @@ function checkWaveProgress() {
             topHUD.style.display = 'none';
             bottomLeftHUD.style.display = 'none';
             bottomRightHUD.style.display = 'none';
+            centerReloadHUD.style.display = 'none';
             overlayTitle.innerText = "MISSION SUCCESS";
             overlayTitle.style.color = "var(--tactical-green)";
             overlaySub.innerText = "BOSS NEUTRALIZED. CLICK TO REPLAY.";
@@ -781,20 +805,19 @@ function update() {
     if (keys['KeyD']) { mx += Math.cos(player.dir + 1.57) * player.speed; my += Math.sin(player.dir + 1.57) * player.speed; }
 
     if (worldMap[Math.floor(player.y)][Math.floor(player.x + mx)] === 0) player.x += mx;
+    if (worldMap[Math.floor(player.y + my)][Math.floor(player.x)] === 0) player.x += mx; // Fix collision fallback context assignment error
     if (worldMap[Math.floor(player.y + my)][Math.floor(player.x)] === 0) player.y += my;
 
-    // Update and track thrown grenades physics loop
     for (let i = grenades.length - 1; i >= 0; i--) {
         let g = grenades[i];
         let nex = g.x + g.vx;
         let ney = g.y + g.vy;
         
-        // Handle solid wall structural bounces
         if (worldMap[Math.floor(g.y)][Math.floor(nex)] > 0) { g.vx *= -0.6; nex = g.x; }
         if (worldMap[Math.floor(ney)][Math.floor(g.x)] > 0) { g.vy *= -0.6; ney = g.y; }
         
         g.x = nex; g.y = ney;
-        g.vx *= 0.95; g.vy *= 0.95; // Kinetic drag damping friction simulation
+        g.vx *= 0.95; g.vy *= 0.95; 
         
         g.life--;
         if (g.life <= 0) {
@@ -1051,13 +1074,11 @@ function draw() {
                         ctx.fillRect(xPos - 40, baseLine - spriteSize * 1.15, 80 * (s.health / s.maxHealth), 6);
                     }
                 } else if (s.type === 'grenade') {
-                    // Render 3D spatial ordinance capsule indicator
                     ctx.fillStyle = "#3a5f3a";
                     ctx.beginPath();
                     ctx.arc(xPos, horizon + (spriteSize * 0.8), spriteSize, 0, Math.PI * 2);
                     ctx.fill();
                     
-                    // Render active pulsing structural ignition frame
                     ctx.fillStyle = (Math.floor(Date.now() / 100) % 2 === 0) ? "#ff3131" : "#000";
                     ctx.beginPath();
                     ctx.arc(xPos, horizon + (spriteSize * 0.8), spriteSize * 0.3, 0, Math.PI * 2);
@@ -1101,7 +1122,7 @@ window.addEventListener('keydown', e => {
     keys[e.code] = true; 
     if (gameState === 'playing') {
         if (e.code === 'KeyR') reload(); 
-        if (e.code === 'KeyE') throwGrenade(); // Handle grenade launch input binding
+        if (e.code === 'KeyE') throwGrenade(); 
     }
 });
 window.addEventListener('keyup', e => keys[e.code] = false);
