@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halisco: Boss Protocol - Reload Text HUD</title>
+    <title>Halisco: Boss Protocol - Mode Selection Menu</title>
     <style>
         :root {
             --tactical-green: #00ff41;
@@ -12,6 +12,7 @@
             --damage-orange: #ff9900;
             --regen-blue: #31d7ff;
             --bone-white: #e0e0e0;
+            --bloody-red: #990000;
         }
 
         body {
@@ -35,8 +36,13 @@
             overflow: hidden;
             width: 800px;
             height: 400px;
-            cursor: pointer;
+            cursor: default;
             transition: box-shadow 0.5s ease-in-out, border-color 0.5s;
+        }
+
+        #game-container.death-border {
+            border-color: var(--damage-red) !important;
+            box-shadow: 0 0 25px rgba(255, 49, 49, 0.6), inset 0 0 40px rgba(153, 0, 0, 0.5);
         }
 
         #damage-vignette {
@@ -44,7 +50,7 @@
             top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none;
             z-index: 40;
-            box-shadow: inset 0 0 0px rgba(255, 0, 0, 0);
+            box-shadow: inset 0 0px rgba(255, 0, 0, 0);
             transition: box-shadow 0.05s ease-out;
         }
 
@@ -53,14 +59,15 @@
             transition: none;
         }
 
-        .death-glow {
-            border-color: var(--damage-red) !important;
-            box-shadow: inset 0 0 100px #7a0000, 0 0 30px #ff0000 !important;
-        }
-
         canvas { display: block; }
 
-        /* Top Right UI Container */
+        #menu-particles {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 101;
+        }
+
         #top-right-hud {
             position: absolute;
             top: 15px;
@@ -114,7 +121,6 @@
             color: var(--tactical-green);
         }
 
-        /* Bottom Left Armor/Health HUD */
         #bottom-left-hud {
             position: absolute;
             bottom: 20px;
@@ -158,7 +164,6 @@
             transition: width 0.1s ease-out, background-color 0.3s ease;
         }
 
-        /* Bottom Right Grenade Cooldown HUD */
         #bottom-right-hud {
             position: absolute;
             bottom: 20px;
@@ -198,10 +203,9 @@
             color: var(--damage-orange);
         }
 
-        /* Center Display Reload Interface Elements */
         #center-reload-hud {
             position: absolute;
-            top: 58%; /* Sits cleanly just beneath central crosshair marker */
+            top: 58%; 
             left: 50%;
             transform: translate(-50%, -50%);
             font-size: 1.1rem;
@@ -263,7 +267,7 @@
         #overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95);
+            background: radial-gradient(circle at center, rgba(15, 5, 5, 0.98) 0%, rgba(0, 0, 0, 0.99) 100%);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -273,19 +277,72 @@
         }
 
         #overlay h1 {
-            font-size: 3rem;
-            margin-bottom: 0.5rem;
-            letter-spacing: 5px;
-            text-shadow: 0 0 15px var(--tactical-green);
+            font-size: 3.2rem;
+            margin-top: 0;
+            margin-bottom: 1rem;
+            letter-spacing: 8px;
+            color: #d1c7bd;
+            text-shadow: 0 0 15px rgba(153, 0, 0, 0.8), 0 0 30px rgba(0, 0, 0, 0.9);
+            font-weight: 900;
+        }
+
+        /* Tactical Stacked Menu Options */
+        #menu-options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 105;
+            width: 280px;
+        }
+
+        .menu-btn {
+            background: rgba(10, 5, 5, 0.6);
+            border: 1px solid #333;
+            color: #888;
+            padding: 10px 0;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.95rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+
+        .menu-btn.active-mode {
+            color: var(--tactical-green);
+            border-color: var(--tactical-green);
+        }
+
+        .menu-btn.active-mode:hover {
+            background: rgba(0, 255, 65, 0.1);
+            box-shadow: 0 0 12px rgba(0, 255, 65, 0.3);
+            transform: scale(1.03);
+        }
+
+        .menu-btn.locked-mode {
+            color: #444;
+            border-color: #222;
+            cursor: not-allowed;
+        }
+
+        #death-notice-sub {
+            z-index: 105;
+            font-size: 0.9rem;
+            letter-spacing: 3px;
+            text-shadow: 0 0 8px rgba(255, 49, 49, 0.4);
+            color: var(--damage-red);
+            font-weight: bold;
+            cursor: pointer;
+            display: none;
         }
 
         .blink {
-            animation: blinker 1.5s linear infinite;
-            color: #fff;
-            font-weight: bold;
+            animation: blinker 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
 
-        @keyframes blinker { 50% { opacity: 0; } }
+        @keyframes blinker { 50% { opacity: 0.15; } }
     </style>
 </head>
 <body>
@@ -295,8 +352,16 @@
 
         <div id="notification">WAVE 1 ARRIVING</div>
         <div id="overlay">
+            <canvas id="menu-particles" width="800" height="400"></canvas>
             <h1 id="overlay-title">HALISCO</h1>
-            <p id="overlay-sub" class="blink">CLICK TO BEGIN OPERATION</p>
+            
+            <div id="menu-options-container">
+                <button class="menu-btn active-mode" id="btn-uprising">Uprising (waves)</button>
+                <button class="menu-btn locked-mode" disabled>Team Deathmatch</button>
+                <button class="menu-btn locked-mode" disabled>Settings</button>
+            </div>
+
+            <p id="death-notice-sub" class="blink">CLICK TO GO BACK TO THE MAIN MENU</p>
         </div>
         
         <canvas id="gameCanvas" width="800" height="400"></canvas>
@@ -358,12 +423,16 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const minimapCanvas = document.getElementById('minimap');
 const mctx = minimapCanvas.getContext('2d');
+const pCanvas = document.getElementById('menu-particles');
+const pctx = pCanvas.getContext('2d');
 const gameContainer = document.getElementById('game-container');
 const weaponWrap = document.getElementById('weapon-wrapper');
 const muzzle = document.getElementById('muzzle-flash');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
-const overlaySub = document.getElementById('overlay-sub');
+const menuOptionsContainer = document.getElementById('menu-options-container');
+const deathNoticeSub = document.getElementById('death-notice-sub');
+const btnUprising = document.getElementById('btn-uprising');
 const crosshair = document.getElementById('crosshair');
 const notify = document.getElementById('notification');
 const topHUD = document.getElementById('top-right-hud');
@@ -383,6 +452,7 @@ let killsInWave = 0;
 let enemiesSpawnedInWave = 0;
 let screenShakeTime = 0;
 let vignetteTimeout = null;
+let menuAshArray = [];
 
 const BASE_ENEMIES = 10;
 const MAX_WAVES = 4;
@@ -404,6 +474,37 @@ const player = {
 
 const keys = {};
 
+function initMenuParticles() {
+    menuAshArray = [];
+    for(let i = 0; i < 40; i++) {
+        menuAshArray.push({
+            x: Math.random() * pCanvas.width,
+            y: Math.random() * pCanvas.height + pCanvas.height,
+            speed: 0.4 + Math.random() * 0.8,
+            size: 1 + Math.random() * 2.5,
+            drift: (Math.random() - 0.5) * 0.3,
+            color: Math.random() > 0.6 ? 'rgba(140, 30, 30, 0.4)' : 'rgba(100, 100, 100, 0.3)'
+        });
+    }
+}
+initMenuParticles();
+
+function handleMenuParticles() {
+    if (gameState === 'playing') return;
+    pctx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+    
+    menuAshArray.forEach(p => {
+        p.y -= p.speed;
+        p.x += p.drift;
+        if(p.y < -10) {
+            p.y = pCanvas.height + 10;
+            p.x = Math.random() * pCanvas.width;
+        }
+        pctx.fillStyle = p.color;
+        pctx.fillRect(p.x, p.y, p.size, p.size);
+    });
+}
+
 function getEnemiesForWave(w) {
     if (w === 4) return 1;
     return BASE_ENEMIES + ((w - 1) * 5);
@@ -424,8 +525,23 @@ function showNotification(text, color = "var(--tactical-green)") {
     setTimeout(() => { notify.style.display = 'none'; }, 3000);
 }
 
+function returnToMainMenu() {
+    gameContainer.classList.remove('death-border');
+    gameContainer.style.cursor = 'default';
+    gameState = 'menu';
+    pCanvas.style.display = 'block';
+    overlay.style.display = 'flex';
+    
+    menuOptionsContainer.style.display = 'flex';
+    deathNoticeSub.style.display = 'none';
+
+    overlayTitle.innerText = "HALISCO";
+    overlayTitle.style.color = "#d1c7bd";
+    overlayTitle.style.textShadow = "0 0 15px rgba(153, 0, 0, 0.8), 0 0 30px rgba(0, 0, 0, 0.9)";
+}
+
 function startNewGame() {
-    gameContainer.classList.remove('death-glow');
+    gameContainer.style.cursor = 'pointer';
     wave = 1;
     killsInWave = 0;
     enemiesSpawnedInWave = 0;
@@ -443,12 +559,15 @@ function startNewGame() {
     startWave();
     gameState = 'playing';
     overlay.style.display = 'none';
+    pCanvas.style.display = 'none';
     weaponWrap.style.display = 'block';
     crosshair.style.display = 'block';
     topHUD.style.display = 'flex';
     bottomLeftHUD.style.display = 'flex';
     bottomRightHUD.style.display = 'block';
     centerReloadHUD.style.display = 'none';
+    
+    canvas.requestPointerLock();
     updateUI();
 }
 
@@ -591,13 +710,24 @@ function checkGameOver() {
         gameState = 'over';
         isFiringContinuous = false;
         document.exitPointerLock();
+        
+        gameContainer.classList.add('death-border');
+        gameContainer.style.cursor = 'pointer';
+
         overlay.style.display = 'flex';
         topHUD.style.display = 'none';
         bottomLeftHUD.style.display = 'none';
         bottomRightHUD.style.display = 'none';
         centerReloadHUD.style.display = 'none';
-        overlayTitle.innerText = "YOUR DEAD";
+        
+        // Dynamic Swap: Hide setup menu options, show death confirmation prompt instead
+        menuOptionsContainer.style.display = 'none';
+        deathNoticeSub.style.display = 'block';
+        deathNoticeSub.innerText = "click to go back to the main menu";
+
+        overlayTitle.innerText = "You're dead";
         overlayTitle.style.color = "var(--damage-red)";
+        overlayTitle.style.textShadow = "0 0 15px rgba(255, 0, 0, 0.7)";
     }
 }
 
@@ -607,7 +737,6 @@ function reload() {
     isFiringContinuous = false; 
     triggerVoice("Reloading");
     
-    // Toggle central indicator visibility
     centerReloadHUD.style.display = 'block';
 
     const startPitch = player.pitch * -0.15;
@@ -618,7 +747,6 @@ function reload() {
         setTimeout(() => {
             player.ammo = 30;
             
-            // Wipe central text layer on reload cycle absolute completion
             centerReloadHUD.style.display = 'none';
 
             updateUI();
@@ -756,9 +884,13 @@ function checkWaveProgress() {
             bottomLeftHUD.style.display = 'none';
             bottomRightHUD.style.display = 'none';
             centerReloadHUD.style.display = 'none';
+            
+            menuOptionsContainer.style.display = 'none';
+            deathNoticeSub.style.display = 'block';
+            deathNoticeSub.innerText = "CLICK TO GO BACK TO THE MAIN MENU";
+
             overlayTitle.innerText = "MISSION SUCCESS";
             overlayTitle.style.color = "var(--tactical-green)";
-            overlaySub.innerText = "BOSS NEUTRALIZED. CLICK TO REPLAY.";
         }
     }
 }
@@ -775,6 +907,7 @@ function generateMap() {
 }
 
 function update() {
+    handleMenuParticles();
     if (gameState !== 'playing') return;
     
     handleRegeneration();
@@ -805,7 +938,6 @@ function update() {
     if (keys['KeyD']) { mx += Math.cos(player.dir + 1.57) * player.speed; my += Math.sin(player.dir + 1.57) * player.speed; }
 
     if (worldMap[Math.floor(player.y)][Math.floor(player.x + mx)] === 0) player.x += mx;
-    if (worldMap[Math.floor(player.y + my)][Math.floor(player.x)] === 0) player.x += mx; // Fix collision fallback context assignment error
     if (worldMap[Math.floor(player.y + my)][Math.floor(player.x)] === 0) player.y += my;
 
     for (let i = grenades.length - 1; i >= 0; i--) {
@@ -1094,13 +1226,23 @@ function draw() {
     drawMinimap();
 }
 
-document.addEventListener('mousedown', (e) => {
-    if (gameState !== 'playing') {
+// Option Interaction Routing
+btnUprising.addEventListener('click', (e) => {
+    e.stopPropagation(); // Block backdrop selection tracking
+    if (gameState === 'menu') {
         startNewGame();
-    } else if (document.pointerLockElement === canvas) {
-        isFiringContinuous = true; 
-    } else {
-        canvas.requestPointerLock();
+    }
+});
+
+document.addEventListener('mousedown', (e) => {
+    if (gameState === 'over' || gameState === 'win') {
+        returnToMainMenu();
+    } else if (gameState === 'playing') {
+        if (document.pointerLockElement === canvas) {
+            isFiringContinuous = true; 
+        } else {
+            canvas.requestPointerLock();
+        }
     }
 });
 
