@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halisco: Boss Protocol - Dark Depths</title>
+    <title>Halisco: Boss Protocol - Fullscreen Edition</title>
     <style>
         :root {
             --tactical-green: #00ff41;
@@ -17,12 +17,13 @@
 
         body {
             margin: 0;
+            padding: 0;
             background-color: #000;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
+            width: 100vw;
             color: var(--tactical-green);
             font-family: 'Courier New', Courier, monospace;
             overflow: hidden;
@@ -31,18 +32,16 @@
 
         #game-container {
             position: relative;
-            border: 2px solid #222;
             background: #000;
             overflow: hidden;
-            width: 800px;
-            height: 400px;
+            width: 100vw;
+            height: 100vh;
             cursor: default;
-            transition: box-shadow 0.5s ease-in-out, border-color 0.5s;
+            transition: box-shadow 0.5s ease-in-out;
         }
 
         #game-container.death-border {
-            border-color: var(--damage-red) !important;
-            box-shadow: 0 0 25px rgba(255, 49, 49, 0.6), inset 0 0 40px rgba(153, 0, 0, 0.5);
+            box-shadow: inset 0 0 50px rgba(153, 0, 0, 0.8);
         }
 
         #damage-vignette {
@@ -55,11 +54,15 @@
         }
 
         #damage-vignette.blood-pulse {
-            box-shadow: inset 0 0 60px rgba(180, 0, 0, 0.85);
+            box-shadow: inset 0 0 100px rgba(180, 0, 0, 0.95);
             transition: none;
         }
 
-        canvas { display: block; }
+        canvas#gameCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
 
         #menu-particles {
             position: absolute;
@@ -70,10 +73,10 @@
 
         #top-right-hud {
             position: absolute;
-            top: 15px;
-            right: 15px;
+            top: 30px;
+            right: 30px;
             display: none;
-            gap: 15px;
+            gap: 25px;
             z-index: 10;
             pointer-events: none;
             transform-origin: top right;
@@ -81,31 +84,31 @@
         }
 
         #top-right-hud.shrunk {
-            transform: scale(0.8);
+            transform: scale(0.95);
         }
 
         #hud-stats {
             background: rgba(5, 5, 5, 0.85);
             border: 2px solid #333;
-            padding: 10px 15px;
+            padding: 16px 24px;
             display: flex;
             flex-direction: column;
             justify-content: center;
-            gap: 6px;
-            min-width: 150px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.7);
+            gap: 12px;
+            min-width: 220px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.8);
         }
 
         #minimap {
-            width: 120px;
-            height: 120px;
+            width: 180px;
+            height: 180px;
             border: 2px solid #333;
             background: rgba(5, 5, 5, 0.85);
-            box-shadow: 0 0 10px rgba(0,0,0,0.7);
+            box-shadow: 0 0 15px rgba(0,0,0,0.8);
         }
 
         .hud-line {
-            font-size: 0.85rem;
+            font-size: 1.2rem;
             font-weight: bold;
             letter-spacing: 1px;
             display: flex;
@@ -123,11 +126,11 @@
 
         #bottom-left-hud {
             position: absolute;
-            bottom: 20px;
-            left: 20px;
+            bottom: 35px;
+            left: 35px;
             display: none;
             flex-direction: column;
-            gap: 5px;
+            gap: 12px;
             z-index: 10;
             pointer-events: none;
             transform-origin: bottom left;
@@ -135,11 +138,11 @@
         }
 
         #bottom-left-hud.expanded {
-            transform: scale(1.3);
+            transform: scale(1.35);
         }
 
         .health-label {
-            font-size: 0.75rem;
+            font-size: 1.1rem;
             font-weight: bold;
             letter-spacing: 2px;
             color: #888;
@@ -148,11 +151,11 @@
         }
 
         #health-bar-container {
-            width: 200px;
-            height: 14px;
+            width: 320px;
+            height: 22px;
             background: rgba(5, 5, 5, 0.75);
             border: 2px solid #444;
-            box-shadow: 0 0 10px rgba(0,0,0,0.8);
+            box-shadow: 0 0 15px rgba(0,0,0,0.8);
             overflow: hidden;
             transition: border-color 0.3s;
         }
@@ -166,8 +169,8 @@
 
         #bottom-right-hud {
             position: absolute;
-            bottom: 20px;
-            right: 20px;
+            bottom: 35px;
+            right: 35px;
             display: none;
             flex-direction: column;
             align-items: flex-end;
@@ -175,23 +178,66 @@
             pointer-events: none;
             background: rgba(5, 5, 5, 0.85);
             border: 2px solid #333;
-            padding: 8px 12px;
+            padding: 14px 22px;
             box-shadow: 0 0 10px rgba(0,0,0,0.7);
-            min-width: 130px;
+            min-width: 200px;
         }
 
         .cooldown-label {
-            font-size: 0.65rem;
+            font-size: 0.9rem;
             color: #666;
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 2px;
+            margin-bottom: 4px;
         }
 
         #cooldown-status {
-            font-size: 0.9rem;
+            font-size: 1.3rem;
             font-weight: bold;
             letter-spacing: 1px;
+        }
+
+        /* --- NEW BOTTOM MIDDLE WEAPON SWAP HUD --- */
+        #bottom-middle-hud {
+            position: absolute;
+            bottom: 35px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            align-items: center;
+            gap: 15px;
+            z-index: 10;
+            pointer-events: none;
+            background: rgba(5, 5, 5, 0.85);
+            border: 2px solid #333;
+            padding: 10px 20px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.8);
+        }
+
+        #swap-preview-circle {
+            width: 55px;
+            height: 55px;
+            border: 2px solid var(--tactical-green);
+            border-radius: 50%;
+            background: rgba(15, 15, 15, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
+        }
+
+        #swap-preview-circle svg {
+            width: 75%;
+            height: 75%;
+        }
+
+        #swap-text-prompt {
+            font-size: 1rem;
+            font-weight: bold;
+            letter-spacing: 1.5px;
+            color: #888;
+            text-transform: uppercase;
+            white-space: nowrap;
         }
 
         .status-ready {
@@ -208,7 +254,7 @@
             top: 58%; 
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 1.1rem;
+            font-size: 1.3rem;
             font-weight: bold;
             letter-spacing: 2px;
             color: var(--damage-orange);
@@ -220,9 +266,9 @@
 
         #weapon-wrapper {
             position: absolute;
-            bottom: -15px; left: 50%;
+            bottom: -35px; left: 50%;
             transform: translateX(-50%);
-            width: 240px; 
+            width: 450px; 
             pointer-events: none;
             z-index: 5;
             transition: transform 0.1s ease-out;
@@ -231,13 +277,21 @@
 
         #muzzle-flash {
             position: absolute;
-            top: 47%; 
+            top: 6%; 
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 110px; height: 110px;
-            background: radial-gradient(circle, #fff 0%, var(--tactical-green) 40%, transparent 70%);
+            width: 240px; height: 240px;
+            background: radial-gradient(circle, #fff 0%, var(--tactical-green) 45%, transparent 70%);
             display: none;
             z-index: 4;
+            pointer-events: none;
+        }
+
+        /* Machete specific styles */
+        .machete-blade {
+            fill: #8a9597;
+            stroke: #cbd5e1;
+            stroke-width: 0.5;
         }
 
         #crosshair {
@@ -245,7 +299,7 @@
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             color: var(--tactical-green);
-            font-size: 28px;
+            font-size: 36px;
             pointer-events: none;
             z-index: 6;
             display: none;
@@ -255,13 +309,14 @@
             position: absolute;
             top: 25%; left: 50%;
             transform: translateX(-50%);
-            font-size: 3rem;
+            font-size: 4rem;
             font-weight: bold;
             text-align: center;
             text-shadow: 0 0 20px #000;
             z-index: 50;
             display: none;
             pointer-events: none;
+            white-space: nowrap;
         }
 
         #overlay {
@@ -277,30 +332,30 @@
         }
 
         #overlay h1 {
-            font-size: 3.2rem;
+            font-size: 5rem;
             margin-top: 0;
-            margin-bottom: 1rem;
-            letter-spacing: 8px;
+            margin-bottom: 1.5rem;
+            letter-spacing: 12px;
             color: #d1c7bd;
-            text-shadow: 0 0 15px rgba(153, 0, 0, 0.8), 0 0 30px rgba(0, 0, 0, 0.9);
+            text-shadow: 0 0 25px rgba(153, 0, 0, 0.8), 0 0 40px rgba(0, 0, 0, 0.9);
             font-weight: 900;
         }
 
         #menu-options-container {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 15px;
             z-index: 105;
-            width: 280px;
+            width: 320px;
         }
 
         .menu-btn {
             background: rgba(10, 5, 5, 0.6);
             border: 1px solid #333;
             color: #888;
-            padding: 10px 0;
+            padding: 12px 0;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 0.95rem;
+            font-size: 1.1rem;
             font-weight: bold;
             letter-spacing: 2px;
             text-transform: uppercase;
@@ -316,7 +371,7 @@
 
         .menu-btn.active-mode:hover {
             background: rgba(0, 255, 65, 0.1);
-            box-shadow: 0 0 12px rgba(0, 255, 65, 0.3);
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.4);
             transform: scale(1.03);
         }
 
@@ -328,7 +383,7 @@
 
         #death-notice-sub {
             z-index: 105;
-            font-size: 0.9rem;
+            font-size: 1.1rem;
             letter-spacing: 3px;
             text-shadow: 0 0 8px rgba(255, 49, 49, 0.4);
             color: var(--damage-red);
@@ -351,7 +406,7 @@
 
         <div id="notification">WAVE 1 ARRIVING</div>
         <div id="overlay">
-            <canvas id="menu-particles" width="800" height="400"></canvas>
+            <canvas id="menu-particles"></canvas>
             <h1 id="overlay-title">HALISCO</h1>
             
             <div id="menu-options-container">
@@ -363,7 +418,7 @@
             <p id="death-notice-sub" class="blink">CLICK TO GO BACK TO THE MAIN MENU</p>
         </div>
         
-        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <canvas id="gameCanvas"></canvas>
         
         <div id="top-right-hud">
             <div id="hud-stats">
@@ -372,7 +427,7 @@
                 <div class="hud-line"><span class="hud-label">REMAINING:</span><span id="hud-remain" class="hud-val">10</span></div>
                 <div class="hud-line"><span class="hud-label">AMMO:</span><span id="hud-ammo" class="hud-val">30/30</span></div>
             </div>
-            <canvas id="minimap" width="120" height="120"></canvas>
+            <canvas id="minimap" width="180" height="180"></canvas>
         </div>
 
         <div id="bottom-left-hud">
@@ -382,6 +437,11 @@
             </div>
         </div>
 
+        <div id="bottom-middle-hud">
+            <div id="swap-preview-circle"></div>
+            <div id="swap-text-prompt">click 1 to swap weapons</div>
+        </div>
+
         <div id="bottom-right-hud">
             <div class="cooldown-label">AUX WEAPON</div>
             <div id="cooldown-status" class="status-ready">GRENADE: READY</div>
@@ -389,31 +449,11 @@
 
         <div id="center-reload-hud">Reloading...</div>
 
-        <div id="muzzle-flash"></div>
         <div id="crosshair">⌖</div>
         
         <div id="weapon-wrapper">
-            <svg id="weapon-svg" viewBox="0 0 200 200">
-                <rect x="76" y="85" width="48" height="25" fill="#141416" stroke="#222" stroke-width="0.5" />
-                <rect x="78" y="78" width="44" height="8" fill="#1c1c1f" />
-                <rect x="80" y="73" width="40" height="5" fill="#0d0d0e" />
-                <rect x="85" y="68" width="30" height="5" fill="#141416" />
-                <rect x="88" y="73" width="4" height="5" fill="#000" />
-                <rect x="108" y="73" width="4" height="5" fill="#000" />
-                <rect x="94" y="38" width="12" height="40" fill="#1a1a1c" />
-                <rect x="96" y="26" width="8" height="12" fill="#0b0b0c" />
-                <polygon points="96,38 104,38 100,28" fill="#141416" />
-                <circle cx="100" cy="45" r="2" fill="#00ff41" fill-opacity="0.6" />
-                <rect x="88" y="52" width="24" height="26" fill="#18181a" rx="1" />
-                <line x1="92" y1="55" x2="92" y2="75" stroke="#0d0d0e" stroke-width="1.5" />
-                <line x1="100" y1="55" x2="100" y2="75" stroke="#0d0d0e" stroke-width="1.5" />
-                <line x1="108" y1="55" x2="108" y2="75" stroke="#0d0d0e" stroke-width="1.5" />
-                <rect x="90" y="110" width="18" height="35" fill="#111112" rx="1" transform="rotate(-5 99 110)" />
-                <line x1="94" y1="115" x2="94" y2="140" stroke="#222" stroke-width="1" />
-                <line x1="100" y1="115" x2="100" y2="140" stroke="#222" stroke-width="1" />
-                <path d="M 76 90 L 62 135 L 86 135 Z" fill="#09090a" />
-                <rect x="76" y="110" width="48" height="90" fill="#09090a" />
-            </svg>
+            <div id="muzzle-flash"></div>
+            <svg id="weapon-svg" viewBox="0 0 200 200"></svg>
         </div>
     </div>
 
@@ -426,6 +466,7 @@ const pCanvas = document.getElementById('menu-particles');
 const pctx = pCanvas.getContext('2d');
 const gameContainer = document.getElementById('game-container');
 const weaponWrap = document.getElementById('weapon-wrapper');
+const weaponSvg = document.getElementById('weapon-svg');
 const muzzle = document.getElementById('muzzle-flash');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
@@ -436,6 +477,8 @@ const crosshair = document.getElementById('crosshair');
 const notify = document.getElementById('notification');
 const topHUD = document.getElementById('top-right-hud');
 const bottomLeftHUD = document.getElementById('bottom-left-hud');
+const bottomMiddleHUD = document.getElementById('bottom-middle-hud');
+const swapPreviewCircle = document.getElementById('swap-preview-circle');
 const bottomRightHUD = document.getElementById('bottom-right-hud');
 const centerReloadHUD = document.getElementById('center-reload-hud');
 const damageVignette = document.getElementById('damage-vignette');
@@ -452,15 +495,49 @@ let enemiesSpawnedInWave = 0;
 let screenShakeTime = 0;
 let vignetteTimeout = null;
 let menuAshArray = [];
+let zBuffer = [];
 
 const BASE_ENEMIES = 10;
 const MAX_WAVES = 4;
 const MAP_SIZE = 16;
-const zBuffer = new Array(canvas.width);
 
 let isFiringContinuous = false;
 let lastAutoShotTime = 0;
 const AUTO_FIRE_RATE = 100; 
+
+// SVG UI Raw Strings for dynamically swapping rendering configurations
+const GUN_SVG_MARKUP = `
+    <rect x="76" y="85" width="48" height="25" fill="#141416" stroke="#222" stroke-width="0.5" />
+    <rect x="78" y="78" width="44" height="8" fill="#1c1c1f" />
+    <rect x="80" y="73" width="40" height="5" fill="#0d0d0e" />
+    <rect x="85" y="68" width="30" height="5" fill="#141416" />
+    <rect x="88" y="73" width="4" height="5" fill="#000" />
+    <rect x="108" y="73" width="4" height="5" fill="#000" />
+    <rect x="94" y="38" width="12" height="40" fill="#1a1a1c" />
+    <rect x="96" y="26" width="8" height="12" fill="#0b0b0c" />
+    <polygon points="96,38 104,38 100,28" fill="#141416" />
+    <circle cx="100" cy="45" r="2" fill="#00ff41" fill-opacity="0.6" />
+    <rect x="88" y="52" width="24" height="26" fill="#18181a" rx="1" />
+    <line x1="92" y1="55" x2="92" y2="75" stroke="#0d0d0e" stroke-width="1.5" />
+    <line x1="100" y1="55" x2="100" y2="75" stroke="#0d0d0e" stroke-width="1.5" />
+    <line x1="108" y1="55" x2="108" y2="75" stroke="#0d0d0e" stroke-width="1.5" />
+    <rect x="90" y="110" width="18" height="35" fill="#111112" rx="1" transform="rotate(-5 99 110)" />
+    <line x1="94" y1="115" x2="94" y2="140" stroke="#222" stroke-width="1" />
+    <line x1="100" y1="115" x2="100" y2="140" stroke="#222" stroke-width="1" />
+    <path d="M 76 90 L 62 135 L 86 135 Z" fill="#09090a" />
+    <rect x="76" y="110" width="48" height="90" fill="#09090a" />
+`;
+
+const MACHETE_SVG_MARKUP = `
+    <rect x="92" y="125" width="16" height="6" fill="#111" stroke="#333" stroke-width="0.5" />
+    <rect x="94" y="131" width="12" height="55" fill="#2d2219" rx="2" />
+    <line x1="94" y1="142" x2="106" y2="142" stroke="#1a120c" stroke-width="2" />
+    <line x1="94" y1="154" x2="106" y2="154" stroke="#1a120c" stroke-width="2" />
+    <line x1="94" y1="166" x2="106" y2="166" stroke="#1a120c" stroke-width="2" />
+    <line x1="94" y1="178" x2="106" y2="178" stroke="#1a120c" stroke-width="2" />
+    <path d="M 95 125 L 91 25 L 105 15 L 109 45 L 105 125 Z" class="machete-blade" />
+    <line x1="97" y1="115" x2="95" y2="35" stroke="#475569" stroke-width="1.5" />
+`;
 
 const player = {
     x: 2.5, y: 2.5, dir: 0, pitch: 0,
@@ -468,10 +545,22 @@ const player = {
     lastDamageTime: 0, 
     lastRegenTick: 0,
     lastGrenadeTime: 0,
-    grenadeCooldown: 10000 
+    grenadeCooldown: 10000,
+    currentWeapon: 'gun', // Options: 'gun', 'machete'
+    isMeleeSwinging: false
 };
 
 const keys = {};
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    pCanvas.width = window.innerWidth;
+    pCanvas.height = window.innerHeight;
+    zBuffer = new Array(canvas.width);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
 function createMenuParticle(initializeFullHeight = false) {
     const isFire = Math.random() > 0.45; 
@@ -500,7 +589,6 @@ initMenuParticles();
 function handleMenuParticles() {
     if (gameState === 'playing') return;
     pctx.clearRect(0, 0, pCanvas.width, pCanvas.height);
-    
     pctx.globalCompositeOperation = 'screen';
 
     menuAshArray.forEach((p, idx) => {
@@ -579,6 +667,8 @@ function startNewGame() {
     player.pitch = 0;
     player.lastDamageTime = Date.now();
     player.lastGrenadeTime = 0;
+    player.currentWeapon = 'gun';
+    player.isMeleeSwinging = false;
     enemies = [];
     projectiles = [];
     grenades = [];
@@ -591,9 +681,11 @@ function startNewGame() {
     crosshair.style.display = 'block';
     topHUD.style.display = 'flex';
     bottomLeftHUD.style.display = 'flex';
+    bottomMiddleHUD.style.display = 'flex';
     bottomRightHUD.style.display = 'block';
     centerReloadHUD.style.display = 'none';
     
+    renderEquippedWeapon();
     canvas.requestPointerLock();
     updateUI();
 }
@@ -642,6 +734,37 @@ function spawnEnemy(isBoss = false) {
     enemiesSpawnedInWave++;
 }
 
+function renderEquippedWeapon() {
+    if (player.currentWeapon === 'gun') {
+        weaponSvg.innerHTML = GUN_SVG_MARKUP;
+        swapPreviewCircle.innerHTML = `<svg viewBox="0 0 200 200" style="transform: scale(0.9);">${MACHETE_SVG_MARKUP}</svg>`;
+        crosshair.innerText = "⌖";
+    } else {
+        weaponSvg.innerHTML = MACHETE_SVG_MARKUP;
+        swapPreviewCircle.innerHTML = `<svg viewBox="0 0 200 200" style="transform: scale(0.65) translateY(10px);">${GUN_SVG_MARKUP}</svg>`;
+        crosshair.innerText = "✧";
+    }
+}
+
+function switchWeapon() {
+    if (player.reloading || player.isMeleeSwinging) return;
+    
+    player.currentWeapon = (player.currentWeapon === 'gun') ? 'machete' : 'gun';
+    isFiringContinuous = false;
+    
+    // Quick draw animation
+    const pitchOffset = player.pitch * -0.15;
+    weaponWrap.style.transition = "transform 0.15s ease-in";
+    weaponWrap.style.transform = `translateX(-50%) translateY(${250 + pitchOffset}px)`;
+    
+    setTimeout(() => {
+        renderEquippedWeapon();
+        updateUI();
+        weaponWrap.style.transition = "transform 0.15s ease-out";
+        weaponWrap.style.transform = `translateX(-50%) translateY(${pitchOffset}px)`;
+    }, 150);
+}
+
 function updateUI() {
     const healthPercent = Math.max(0, Math.floor(player.health));
     const healthBarFill = document.getElementById('health-bar-fill');
@@ -680,7 +803,12 @@ function updateUI() {
 
     let remainingSkeletons = getEnemiesForWave(wave) - killsInWave;
 
-    document.getElementById('hud-ammo').innerText = `${player.ammo}/30`;
+    if (player.currentWeapon === 'gun') {
+        document.getElementById('hud-ammo').innerText = `${player.ammo}/30`;
+    } else {
+        document.getElementById('hud-ammo').innerText = `MELEE`;
+    }
+    
     document.getElementById('hud-wave').innerText = `${wave}/${MAX_WAVES}`;
     document.getElementById('hud-kills').innerText = killsInWave;
     document.getElementById('hud-remain').innerText = Math.max(0, remainingSkeletons);
@@ -744,6 +872,7 @@ function checkGameOver() {
         overlay.style.display = 'flex';
         topHUD.style.display = 'none';
         bottomLeftHUD.style.display = 'none';
+        bottomMiddleHUD.style.display = 'none';
         bottomRightHUD.style.display = 'none';
         centerReloadHUD.style.display = 'none';
         
@@ -758,7 +887,7 @@ function checkGameOver() {
 }
 
 function reload() {
-    if (player.reloading || player.ammo === 30) return;
+    if (player.currentWeapon !== 'gun' || player.reloading || player.ammo === 30) return;
     player.reloading = true;
     isFiringContinuous = false; 
     triggerVoice("Reloading");
@@ -772,7 +901,6 @@ function reload() {
         weaponWrap.style.transform = `translateX(-50%) translateY(${280 + startPitch}px) rotate(-5deg)`;
         setTimeout(() => {
             player.ammo = 30;
-            
             centerReloadHUD.style.display = 'none';
 
             updateUI();
@@ -788,16 +916,21 @@ function reload() {
 }
 
 function shoot() {
+    if (player.reloading || player.isMeleeSwinging) return;
+
+    if (player.currentWeapon === 'machete') {
+        executeMacheteSwing();
+        return;
+    }
+
     if (player.ammo <= 0) {
         isFiringContinuous = false;
         reload();
         return;
     }
-    if (player.reloading) return;
 
     player.ammo--;
     updateUI();
-    
     player.pitch += 6; 
     
     const currentPitchOffset = player.pitch * -0.15;
@@ -811,6 +944,35 @@ function shoot() {
     muzzle.style.display = 'block';
     setTimeout(() => muzzle.style.display = 'none', 30);
 
+    evaluateHitscanDamage(15, 25);
+}
+
+function executeMacheteSwing() {
+    player.isMeleeSwinging = true;
+    isFiringContinuous = false; // Turn off trigger down mapping to enforce single clicks
+
+    const pitchOffset = player.pitch * -0.15;
+    weaponWrap.style.transition = "transform 0.08s cubic-bezier(0.15, 0.85, 0.35, 1.2)";
+    weaponWrap.style.transform = `translateX(-30%) translateY(${pitchOffset - 20}px) rotate(35deg) scale(1.15)`;
+    
+    setTimeout(() => {
+        weaponWrap.style.transition = "transform 0.05s ease-in";
+        weaponWrap.style.transform = `translateX(-70%) translateY(${pitchOffset + 40}px) rotate(-45deg) scale(1.1)`;
+        
+        // Check structural slice collision at close range
+        evaluateHitscanDamage(1.8, 50);
+
+        setTimeout(() => {
+            weaponWrap.style.transition = "transform 0.15s ease-out";
+            weaponWrap.style.transform = `translateX(-50%) translateY(${pitchOffset}px) rotate(0deg) scale(1)`;
+            setTimeout(() => {
+                player.isMeleeSwinging = false;
+            }, 150);
+        }, 700);
+    }, 80);
+}
+
+function evaluateHitscanDamage(maxRange, damageAmount) {
     enemies.forEach(en => {
         if (en.isDying) return; 
 
@@ -821,8 +983,8 @@ function shoot() {
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
         
         let dist = Math.hypot(dx, dy);
-        let hitBox = en.isBoss ? 0.4 : 0.15; 
-        if (Math.abs(angleDiff) < hitBox && dist < 15) {
+        let hitBox = en.isBoss ? 0.4 : 0.22; 
+        if (Math.abs(angleDiff) < hitBox && dist < maxRange) {
             let clearShot = true;
             for(let d=0; d<dist; d+=0.2) {
                 if(worldMap[Math.floor(player.y + Math.sin(angleToEn)*d)][Math.floor(player.x + Math.cos(angleToEn)*d)] > 0) {
@@ -830,7 +992,7 @@ function shoot() {
                 }
             }
             if(clearShot) {
-                en.health -= 25; 
+                en.health -= damageAmount; 
                 en.hitFlash = 3;
                 if(en.health <= 0) { 
                     en.isDying = true;
@@ -858,7 +1020,6 @@ function throwGrenade() {
         vy: Math.sin(player.dir) * launchForce,
         life: 45 
     });
-    
     updateUI();
 }
 
@@ -908,6 +1069,7 @@ function checkWaveProgress() {
             overlay.style.display = 'flex';
             topHUD.style.display = 'none';
             bottomLeftHUD.style.display = 'none';
+            bottomMiddleHUD.style.display = 'none';
             bottomRightHUD.style.display = 'none';
             centerReloadHUD.style.display = 'none';
             
@@ -939,7 +1101,7 @@ function update() {
     handleRegeneration();
     updateGrenadeHUD();
 
-    if (isFiringContinuous && !player.reloading) {
+    if (isFiringContinuous && !player.reloading && player.currentWeapon === 'gun') {
         const now = Date.now();
         if (now - lastAutoShotTime >= AUTO_FIRE_RATE) {
             shoot();
@@ -952,7 +1114,7 @@ function update() {
 
     if (screenShakeTime > 0) {
         screenShakeTime--;
-        canvas.style.transform = `translate(${(Math.random()-0.5)*12}px, ${(Math.random()-0.5)*12}px)`;
+        canvas.style.transform = `translate(${(Math.random()-0.5)*15}px, ${(Math.random()-0.5)*15}px)`;
     } else {
         canvas.style.transform = `translate(0,0)`;
     }
@@ -1019,13 +1181,8 @@ function update() {
         if (dist > 1.0) {
             let nex = en.x + Math.cos(ang) * speed;
             let ney = en.y + Math.sin(ang) * speed;
-            
-            if (worldMap[Math.floor(en.y)][Math.floor(nex)] === 0) {
-                en.x = nex;
-            }
-            if (worldMap[Math.floor(ney)][Math.floor(en.x)] === 0) {
-                en.y = ney;
-            }
+            if (worldMap[Math.floor(en.y)][Math.floor(nex)] === 0) en.x = nex;
+            if (worldMap[Math.floor(ney)][Math.floor(en.x)] === 0) en.y = ney;
         }
 
         if (en.isMelee) {
@@ -1057,14 +1214,13 @@ function drawMinimap() {
 
     const cellSize = minimapCanvas.width / MAP_SIZE;
 
-    // Minimap rendering colors adjusted to match gameplay wall updates
     for (let y = 0; y < MAP_SIZE; y++) {
         for (let x = 0; x < MAP_SIZE; x++) {
             if (worldMap[y][x] === 1) {
-                mctx.fillStyle = "#3a1515"; // Dark red boundaries
+                mctx.fillStyle = "#3a1515"; 
                 mctx.fillRect(x * cellSize, y * cellSize, cellSize - 0.5, cellSize - 0.5);
             } else if (worldMap[y][x] === 2) {
-                mctx.fillStyle = "#1e1e1e"; // Deep charcoal inner pillars
+                mctx.fillStyle = "#1e1e1e"; 
                 mctx.fillRect(x * cellSize, y * cellSize, cellSize - 0.5, cellSize - 0.5);
             }
         }
@@ -1102,9 +1258,9 @@ function drawMinimap() {
 
 function draw() {
     if (gameState === 'menu') return;
-    const horizon = 200 + player.pitch;
-    ctx.fillStyle = "#0a0a0d"; ctx.fillRect(0, 0, canvas.width, canvas.height); // Deep dark ground
-    ctx.fillStyle = "#120808"; ctx.fillRect(0, 0, canvas.width, horizon); // Distant dark red ambient horizon sky
+    const horizon = (canvas.height / 2) + player.pitch;
+    ctx.fillStyle = "#0a0a0d"; ctx.fillRect(0, 0, canvas.width, canvas.height); 
+    ctx.fillStyle = "#120808"; ctx.fillRect(0, 0, canvas.width, horizon); 
 
     const fov = 1.1;
     for (let i = 0; i < canvas.width; i++) {
@@ -1120,13 +1276,10 @@ function draw() {
         zBuffer[i] = dist * Math.cos(rayA - player.dir);
         let h = canvas.height / zBuffer[i];
         
-        // Wall Raycasting Shaders
         if (hit === 1) {
-            // Type 1: Tactical Green shifted into Dark Crimson Red (shaded by distance falloff)
             let rValue = Math.max(10, 140 - (dist * 10));
             ctx.strokeStyle = `rgb(${rValue}, 12, 12)`;
         } else {
-            // Type 2: Soft Grey shifted into a Deep Charcoal Grey (shaded by distance falloff)
             let greyValue = Math.max(8, 70 - (dist * 5));
             ctx.strokeStyle = `rgb(${greyValue}, ${greyValue}, ${greyValue})`;
         }
@@ -1278,7 +1431,11 @@ document.addEventListener('mousedown', (e) => {
         returnToMainMenu();
     } else if (gameState === 'playing') {
         if (document.pointerLockElement === canvas) {
-            isFiringContinuous = true; 
+            if (player.currentWeapon === 'gun') {
+                isFiringContinuous = true; 
+            } else {
+                shoot(); // Fire manual slash for melee
+            }
         } else {
             canvas.requestPointerLock();
         }
@@ -1294,8 +1451,11 @@ document.addEventListener('mouseup', (e) => {
 document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === canvas && gameState === 'playing') {
         player.dir += e.movementX * 0.0025;
-        player.pitch = Math.max(-150, Math.min(150, player.pitch - e.movementY * 0.8));
-        if (!player.reloading) weaponWrap.style.transform = `translateX(-50%) translateY(${player.pitch * -0.15}px)`;
+        player.pitch = Math.max(-200, Math.min(200, player.pitch - e.movementY * 0.8));
+        
+        if (!player.reloading && !player.isMeleeSwinging) {
+            weaponWrap.style.transform = `translateX(-50%) translateY(${player.pitch * -0.15}px)`;
+        }
     }
 });
 
@@ -1304,6 +1464,7 @@ window.addEventListener('keydown', e => {
     if (gameState === 'playing') {
         if (e.code === 'KeyR') reload(); 
         if (e.code === 'KeyE') throwGrenade(); 
+        if (e.code === 'Digit1') switchWeapon();
     }
 });
 window.addEventListener('keyup', e => keys[e.code] = false);
