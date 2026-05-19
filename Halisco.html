@@ -74,7 +74,7 @@
             25% { opacity: 1; box-shadow: inset 0 0 100px rgba(0, 255, 65, 0.95); }
             50% { opacity: 0.3; box-shadow: inset 0 0 50px rgba(0, 255, 65, 0.5); }
             75% { opacity: 0.9; box-shadow: inset 0 0 90px rgba(0, 255, 65, 0.85); }
-            100% { opacity: 0; box-shadow: inset 0 0 0px rgba(0, 255, 65, 0); }
+            100% { opacity: 0; box-shadow: inset 0 0px rgba(0, 255, 65, 0); }
         }
 
         .healing-flash-active {
@@ -664,7 +664,7 @@ const difficultyModifiers = {
 
 const BASE_ENEMIES = 10;
 const MAX_WAVES = 4;
-const MAP_SIZE = 24; // Increased map size to better facilitate 110-entity sandbox limits
+let MAP_SIZE = 24; // Dynamic: Overwritten to 64 when running TDM settings
 
 let isFiringContinuous = false;
 let lastAutoShotTime = 0;
@@ -752,7 +752,7 @@ const GRENADE_ARM_MARKUP = `
 
 const player = {
     x: 4.5, y: 4.5, dir: 0, pitch: 0,
-    speed: 0.07, ammo: 30, reloading: false, health: 100,
+    speed: 0.09, ammo: 30, reloading: false, health: 100,
     lastDamageTime: 0, 
     lastRegenTick: 0,
     lastGrenadeTime: 0,
@@ -896,7 +896,7 @@ function startNewGame(difficultyChoice) {
     enemiesSpawnedInWave = 0;
     player.health = 100;
     player.ammo = 30;
-    player.x = 4.5; player.y = 4.5;
+    player.x = 6.5; player.y = 6.5;
     player.dir = 0;
     player.pitch = 0;
     player.lastDamageTime = Date.now();
@@ -912,16 +912,23 @@ function startNewGame(difficultyChoice) {
     grenades = [];
     environmentObjects = [];
     
+    if (gameMode === 'tdm') {
+        MAP_SIZE = 64; // Scale map configuration boundaries drastically higher
+    } else {
+        MAP_SIZE = 24; // Reset to default compact maze for regular waves
+    }
+    
     generateMap();
     
     if (gameMode === 'tdm') {
         document.getElementById('hud-label-dynamic').innerText = "ALLIES:";
         showNotification("TEAM DEATHMATCH INITIALIZED", "var(--regen-blue)");
-        // Construct the 9 synthetic teammates
-        for (let i = 0; i < 9; i++) {
+        
+        // Form a squad of 14 armored heavy combat units
+        for (let i = 0; i < 14; i++) {
             spawnTeammate();
         }
-        // Prefill environment loops
+        // Build operational enemy clusters inside space parameters
         for (let i = 0; i < tdmTotalEnemies; i++) {
             spawnEnemy();
         }
@@ -972,9 +979,9 @@ function spawnEnemy(isBoss = false) {
     if (gameMode === 'uprising' && enemiesSpawnedInWave >= getEnemiesForWave(wave)) return;
     let ex, ey;
     do {
-        ex = Math.random() * (MAP_SIZE - 2) + 1;
-        ey = Math.random() * (MAP_SIZE - 2) + 1;
-    } while (worldMap[Math.floor(ey)][Math.floor(ex)] !== 0 || Math.hypot(ex-player.x, ey-player.y) < 5);
+        ex = Math.random() * (MAP_SIZE - 4) + 2;
+        ey = Math.random() * (MAP_SIZE - 4) + 2;
+    } while (worldMap[Math.floor(ey)][Math.floor(ex)] !== 0 || Math.hypot(ex-player.x, ey-player.y) < 6);
     
     let isMelee = !isBoss && (gameMode === 'uprising' && Math.random() < 0.25);
     const activeMod = difficultyModifiers[selectedDifficulty];
@@ -1002,15 +1009,15 @@ function spawnEnemy(isBoss = false) {
 function spawnTeammate() {
     let tx, ty;
     do {
-        tx = Math.random() * (MAP_SIZE - 4) + 2;
-        ty = Math.random() * (MAP_SIZE - 4) + 2;
-    } while (worldMap[Math.floor(ty)][Math.floor(tx)] !== 0 || Math.hypot(tx-player.x, ty-player.y) > 8);
+        tx = Math.random() * (MAP_SIZE - 6) + 3;
+        ty = Math.random() * (MAP_SIZE - 6) + 3;
+    } while (worldMap[Math.floor(ty)][Math.floor(tx)] !== 0 || Math.hypot(tx-player.x, ty-player.y) > 20);
 
     teammates.push({
         x: tx, y: ty,
-        health: 120,
-        maxHealth: 120,
-        lastShot: Date.now() + (Math.random() * 1500),
+        health: 500,       // Boosted to 500% of player health capacity
+        maxHealth: 500,
+        lastShot: Date.now() + (Math.random() * 800),
         hitFlash: 0,
         isFiring: false,
         isDying: false,
@@ -1147,7 +1154,7 @@ function updateUI() {
 
     if (gameMode === 'tdm') {
         const activeTeammates = teammates.filter(t => !t.isDying).length;
-        document.getElementById('hud-wave').innerText = `${activeTeammates + 1}/10`; // Includes player
+        document.getElementById('hud-wave').innerText = `${activeTeammates + 1}/15`; // Updated total cohort tracking counter
         document.getElementById('hud-kills').innerText = totalKillsTDM;
         document.getElementById('hud-remain').innerText = enemies.filter(e => !e.isDying).length;
     } else {
@@ -1302,7 +1309,7 @@ function shoot() {
     muzzle.style.display = 'block';
     setTimeout(() => muzzle.style.display = 'none', 30);
 
-    evaluateHitscanDamage(15, 25);
+    evaluateHitscanDamage(35, 25); // Increased scan reach values to reflect map scale
 }
 
 function executeMacheteSwing() {
@@ -1317,7 +1324,7 @@ function executeMacheteSwing() {
         weaponWrap.style.transition = "transform 0.05s ease-in";
         weaponWrap.style.transform = `translateX(-70%) translateY(${pitchOffset + 40}px) rotate(-45deg) scale(1.1)`;
         
-        evaluateHitscanDamage(1.8, 50);
+        evaluateHitscanDamage(2.2, 50);
 
         setTimeout(() => {
             weaponWrap.style.transition = "transform 0.15s ease-out";
@@ -1352,7 +1359,7 @@ function evaluateHitscanDamage(maxRange, damageAmount) {
         if (withinX && withinY) {
             let angleToEn = Math.atan2(dy, dx);
             let clearShot = true;
-            for(let d = 0.2; d < dist; d += 0.2) {
+            for(let d = 0.2; d < dist; d += 0.3) {
                 let checkX = Math.floor(player.x + Math.cos(angleToEn) * d);
                 let checkY = Math.floor(player.y + Math.sin(angleToEn) * d);
                 if(worldMap[checkY] && worldMap[checkY][checkX] > 0) {
@@ -1395,13 +1402,13 @@ function throwGrenade() {
     grenadeArmWrap.classList.add('throwing');
     
     setTimeout(() => {
-        const launchForce = 0.12;
+        const launchForce = 0.14;
         grenades.push({
             x: player.x,
             y: player.y,
             vx: Math.cos(player.dir) * launchForce,
             vy: Math.sin(player.dir) * launchForce,
-            life: 45 
+            life: 50 
         });
         updateUI();
         
@@ -1413,7 +1420,7 @@ function throwGrenade() {
 
 function processExplosion(gx, gy) {
     screenShakeTime = 25; 
-    const blastRadius = 3.0;
+    const blastRadius = 4.5; // Wider splash calculations
     
     const playerDist = Math.hypot(player.x - gx, player.y - gy);
     if (playerDist <= blastRadius) {
@@ -1427,7 +1434,7 @@ function processExplosion(gx, gy) {
         const tmDist = Math.hypot(tm.x - gx, tm.y - gy);
         if (tmDist <= blastRadius) {
             const damagePercentage = 1.0 - (tmDist / blastRadius);
-            tm.health -= Math.floor(damagePercentage * 150);
+            tm.health -= Math.floor(damagePercentage * 120); // Tanky frames absorb splash damage better
             if (tm.health <= 0) {
                 tm.isDying = true;
                 tm.deathTimer = 30;
@@ -1509,29 +1516,28 @@ function generateMap() {
             if (x === 0 || x === MAP_SIZE-1 || y === 0 || y === MAP_SIZE-1) {
                 worldMap[y][x] = 1;
             } else if (gameMode === 'uprising') {
-                // Concrete/Industrial Maze Pillars
-                if (Math.random() < 0.15) worldMap[y][x] = Math.random() > 0.5 ? 1 : 2;
+                if (Math.random() < 0.14) worldMap[y][x] = Math.random() > 0.5 ? 1 : 2;
             }
         }
     }
 
-    // TDM Map Setup: Organic Environment Objects (Trees)
+    // Dynamic Organic Tree placements across the expanded field grid
     if (gameMode === 'tdm') {
-        const treeCount = 18;
+        const treeCount = 45; // Populated scaling count to reflect the expanded arena size
         for (let i = 0; i < treeCount; i++) {
-            let tx = Math.floor(Math.random() * (MAP_SIZE - 4)) + 2;
-            let ty = Math.floor(Math.random() * (MAP_SIZE - 4)) + 2;
-            if (Math.hypot(tx - player.x, ty - player.y) > 4) {
-                worldMap[ty][tx] = 3; // Type 3 flag tells the compiler it represents a tree line obstruction
+            let tx = Math.floor(Math.random() * (MAP_SIZE - 6)) + 3;
+            let ty = Math.floor(Math.random() * (MAP_SIZE - 6)) + 3;
+            if (Math.hypot(tx - player.x, ty - player.y) > 5) {
+                worldMap[ty][tx] = 3; 
                 environmentObjects.push({x: tx + 0.5, y: ty + 0.5, type: 'tree'});
             }
         }
     }
 
-    // Safety clear zone for initial spawn
-    for(let r=1; r<5; r++){
-        for(let c=1; c<5; c++){
-            worldMap[r][c] = 0;
+    // Absolute safe perimeter surrounding default player point matrices
+    for(let r=1; r<7; r++){
+        for(let c=1; c<7; c++){
+            if(r < MAP_SIZE && c < MAP_SIZE) worldMap[r][c] = 0;
         }
     }
 }
@@ -1561,7 +1567,7 @@ function update() {
         canvas.style.transform = `translate(0,0)`;
     }
 
-    // Player Physics Loop
+    // Player Physics Engine
     let mx = 0, my = 0;
     if (keys['KeyW']) { mx += Math.cos(player.dir) * player.speed; my += Math.sin(player.dir) * player.speed; }
     if (keys['KeyS']) { mx -= Math.cos(player.dir) * player.speed; my -= Math.sin(player.dir) * player.speed; }
@@ -1571,7 +1577,7 @@ function update() {
     if (worldMap[Math.floor(player.y)][Math.floor(player.x + mx)] === 0) player.x += mx;
     if (worldMap[Math.floor(player.y + my)][Math.floor(player.x)] === 0) player.y += my;
 
-    // Ballistics Loop
+    // Projectile Processing Loop
     for (let i = grenades.length - 1; i >= 0; i--) {
         let g = grenades[i];
         let nex = g.x + g.vx;
@@ -1592,11 +1598,9 @@ function update() {
         p.x += p.vx; p.y += p.vy;
         if (worldMap[Math.floor(p.y)][Math.floor(p.x)] > 0) { projectiles.splice(i, 1); continue; }
         
-        // Track targets based on team alignment origin
         if (p.isTeammateProj) {
-            // Evaluates projectile trajectory mapping against enemy bots
             for (let e of enemies) {
-                if (!e.isDying && Math.hypot(p.x - e.x, p.y - e.y) < 0.4) {
+                if (!e.isDying && Math.hypot(p.x - e.x, p.y - e.y) < 0.5) {
                     e.health -= 20;
                     e.hitFlash = 3;
                     if (e.health <= 0) {
@@ -1611,7 +1615,6 @@ function update() {
                 }
             }
         } else {
-            // Projectile alignment from hostile forces impacts player or allied bots
             if (Math.hypot(p.x - player.x, p.y - player.y) < 0.3) {
                 projectiles.splice(i, 1);
                 registerPlayerDamage(10);
@@ -1619,7 +1622,7 @@ function update() {
             }
             let hitAlly = false;
             for (let tm of teammates) {
-                if (!tm.isDying && Math.hypot(p.x - tm.x, p.y - tm.y) < 0.35) {
+                if (!tm.isDying && Math.hypot(p.x - tm.x, p.y - tm.y) < 0.5) {
                     tm.health -= 12;
                     tm.hitFlash = 3;
                     if (tm.health <= 0) {
@@ -1639,7 +1642,7 @@ function update() {
         if (p.life <= 0) projectiles.splice(i, 1);
     }
 
-    // Teammate Processing Logic (TDM Only)
+    // Heavy Robot Cohort AI Calculations (TDM Mode Only)
     if (gameMode === 'tdm') {
         for (let i = teammates.length - 1; i >= 0; i--) {
             let tm = teammates[i];
@@ -1650,9 +1653,9 @@ function update() {
             }
             if (tm.hitFlash > 0) tm.hitFlash--;
 
-            // Scan proximity array looking for valid hostiles
+            // Tracking sweep matrix over entire field scale
             let target = null;
-            let minDist = 12;
+            let minDist = 32; // Scanning distance limit increased for large maps
             enemies.forEach(e => {
                 if (!e.isDying) {
                     let d = Math.hypot(e.x - tm.x, e.y - tm.y);
@@ -1662,30 +1665,49 @@ function update() {
 
             if (target) {
                 let ang = Math.atan2(target.y - tm.y, target.x - tm.x);
-                // Move towards acquired target position
-                if (minDist > 3.5) {
-                    let nex = tm.x + Math.cos(ang) * 0.025;
-                    let ney = tm.y + Math.sin(ang) * 0.025;
+                
+                // Keep moving smoothly and pacing combat lines
+                if (minDist > 5.0) {
+                    let nex = tm.x + Math.cos(ang) * 0.04;
+                    let ney = tm.y + Math.sin(ang) * 0.04;
+                    if (worldMap[Math.floor(tm.y)][Math.floor(nex)] === 0) tm.x = nex;
+                    if (worldMap[Math.floor(ney)][Math.floor(tm.x)] === 0) tm.y = ney;
+                } else if (minDist < 3.0) {
+                    // Back away or flank slightly if enemies get too close
+                    let nex = tm.x - Math.cos(ang) * 0.03;
+                    let ney = tm.y - Math.sin(ang) * 0.03;
                     if (worldMap[Math.floor(tm.y)][Math.floor(nex)] === 0) tm.x = nex;
                     if (worldMap[Math.floor(ney)][Math.floor(tm.x)] === 0) tm.y = ney;
                 }
-                // Actively maintain suppressive fire schedules
-                if (Date.now() - tm.lastShot > 1400) {
+                
+                // SHOOT FAST: Internal target firing cycle rate set to 350ms (Ultra high speed suppressive output)
+                if (Date.now() - tm.lastShot > 350) {
                     tm.isFiring = true;
                     tm.lastShot = Date.now();
                     projectiles.push({
                         x: tm.x, y: tm.y,
-                        vx: Math.cos(ang) * 0.14, vy: Math.sin(ang) * 0.14,
-                        life: 120,
+                        vx: Math.cos(ang + (Math.random() - 0.5) * 0.08) * 0.16, // Fast, high velocity fire vectors
+                        vy: Math.sin(ang + (Math.random() - 0.5) * 0.08) * 0.16,
+                        life: 160,
                         isTeammateProj: true
                     });
-                    setTimeout(() => tm.isFiring = false, 120);
+                    setTimeout(() => tm.isFiring = false, 70);
                 }
+            } else {
+                // Idle movement: Coordinated roaming logic so they actively patrol the giant arena looking for conflicts
+                if (Math.random() < 0.02) {
+                    tm.idleAngle = (tm.idleAngle || Math.random() * Math.PI * 2) + (Math.random() - 0.5) * 1.0;
+                }
+                let patAngle = tm.idleAngle || 0;
+                let nex = tm.x + Math.cos(patAngle) * 0.02;
+                let ney = tm.y + Math.sin(patAngle) * 0.02;
+                if (worldMap[Math.floor(tm.y)][Math.floor(nex)] === 0) tm.x = nex;
+                if (worldMap[Math.floor(ney)][Math.floor(tm.x)] === 0) tm.y = ney;
             }
         }
     }
 
-    // Enemy Processing Loop
+    // Hostile Behavior Logic Routine
     for (let i = enemies.length - 1; i >= 0; i--) {
         let en = enemies[i];
         if (en.isDying) {
@@ -1702,7 +1724,6 @@ function update() {
         if (en.hitFlash > 0) en.hitFlash--;
         if (en.swingTime > 0) en.swingTime--;
 
-        // Targets closest profile entity (Player or operational Teammates)
         let trackingTarget = player;
         let bestDist = Math.hypot(player.x - en.x, player.y - en.y);
 
@@ -1716,7 +1737,7 @@ function update() {
         }
 
         let ang = Math.atan2(trackingTarget.y - en.y, trackingTarget.x - en.x);
-        let speed = en.isBoss ? 0.015 : (en.isMelee ? 0.025 : 0.02);
+        let speed = en.isBoss ? 0.015 : (en.isMelee ? 0.03 : 0.022);
         
         if (bestDist > 1.2) {
             let nex = en.x + Math.cos(ang) * speed;
@@ -1726,7 +1747,7 @@ function update() {
         }
 
         if (en.isMelee) {
-            if (bestDist <= 1.3 && Date.now() - en.lastShot > 1500) {
+            if (bestDist <= 1.4 && Date.now() - en.lastShot > 1400) {
                 en.swingTime = 20; 
                 en.lastShot = Date.now();
                 if (trackingTarget === player) {
@@ -1744,7 +1765,7 @@ function update() {
         } else {
             const activeMod = difficultyModifiers[selectedDifficulty];
             let fireRate = en.isBoss ? 800 : ((3000 - (wave * 200)) * activeMod.fireRateMultiplier);
-            if (gameMode === 'tdm') fireRate = 2200 * activeMod.fireRateMultiplier;
+            if (gameMode === 'tdm') fireRate = 2000 * activeMod.fireRateMultiplier;
 
             if (Date.now() - en.lastShot > fireRate) {
                 en.isFiring = true;
@@ -1771,20 +1792,20 @@ function drawMinimap() {
         for (let x = 0; x < MAP_SIZE; x++) {
             if (worldMap[y][x] === 1) {
                 mctx.fillStyle = gameMode === 'tdm' ? "#1c331c" : "#3a1515"; 
-                mctx.fillRect(x * cellSize, y * cellSize, cellSize - 0.5, cellSize - 0.5);
+                mctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
             } else if (worldMap[y][x] === 2) {
                 mctx.fillStyle = "#1e1e1e"; 
-                mctx.fillRect(x * cellSize, y * cellSize, cellSize - 0.5, cellSize - 0.5);
+                mctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
             } else if (worldMap[y][x] === 3) {
-                mctx.fillStyle = "#1a5e1a"; // Organic forest canopy node markers
-                mctx.fillRect(x * cellSize, y * cellSize, cellSize - 0.5, cellSize - 0.5);
+                mctx.fillStyle = "#1a5e1a"; 
+                mctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
             }
         }
     }
 
     grenades.forEach(g => {
         mctx.fillStyle = "#ffaa00";
-        mctx.fillRect(g.x * cellSize - 2, g.y * cellSize - 2, 4, 4);
+        mctx.fillRect(g.x * cellSize - 1.5, g.y * cellSize - 1.5, 3, 3);
     });
 
     teammates.forEach(tm => {
@@ -1799,7 +1820,7 @@ function drawMinimap() {
         if (en.isDying) return; 
         mctx.fillStyle = en.isBoss ? "#ff3131" : "#ff5c5c";
         mctx.beginPath();
-        let r = en.isBoss ? 4 : 2.5;
+        let r = en.isBoss ? 3.5 : 2;
         mctx.arc(en.x * cellSize, en.y * cellSize, r, 0, Math.PI * 2);
         mctx.fill();
     });
@@ -1808,15 +1829,15 @@ function drawMinimap() {
     const py = player.y * cellSize;
 
     mctx.strokeStyle = "rgba(0, 255, 65, 0.4)";
-    mctx.lineWidth = 1.5;
+    mctx.lineWidth = 1;
     mctx.beginPath();
     mctx.moveTo(px, py);
-    mctx.lineTo(px + Math.cos(player.dir) * 15, py + Math.sin(player.dir) * 15);
+    mctx.lineTo(px + Math.cos(player.dir) * 12, py + Math.sin(player.dir) * 12);
     mctx.stroke();
 
     mctx.fillStyle = "var(--tactical-green)";
     mctx.beginPath();
-    mctx.arc(px, py, 3.5, 0, Math.PI * 2);
+    mctx.arc(px, py, 3, 0, Math.PI * 2);
     mctx.fill();
 }
 
@@ -1824,11 +1845,10 @@ function draw() {
     if (gameState === 'menu') return;
     const horizon = (canvas.height / 2) + player.pitch;
     
-    // Custom Environment Rendering Core (Concrete Bunker vs Grassy Skirmish Zone)
-    ctx.fillStyle = gameMode === 'tdm' ? "#2d4a1e" : "#0a0a0d"; // Floor rendering pass
+    ctx.fillStyle = gameMode === 'tdm' ? "#2d4a1e" : "#0a0a0d"; 
     ctx.fillRect(0, 0, canvas.width, canvas.height); 
     
-    ctx.fillStyle = gameMode === 'tdm' ? "#3b5e66" : "#120808"; // Ceiling/Atmosphere space pass
+    ctx.fillStyle = gameMode === 'tdm' ? "#3b5e66" : "#120808"; 
     ctx.fillRect(0, 0, canvas.width, horizon); 
 
     const fov = 1.1;
@@ -1836,8 +1856,8 @@ function draw() {
         let rayA = (player.dir - fov/2) + (i / canvas.width) * fov;
         let dist = 0, hit = 0;
         let cA = Math.cos(rayA), sA = Math.sin(rayA);
-        while (hit === 0 && dist < 24) {
-            dist += 0.05;
+        while (hit === 0 && dist < 40) { // Extended scan bounds to line up with bigger map scale limits
+            dist += 0.08;
             let tx = Math.floor(player.x + cA * dist);
             let ty = Math.floor(player.y + sA * dist);
             if (worldMap[ty] && worldMap[ty][tx] > 0) hit = worldMap[ty][tx];
@@ -1847,30 +1867,29 @@ function draw() {
         
         if (hit === 1) {
             if (gameMode === 'tdm') {
-                let greenVal = Math.max(25, 100 - (dist * 4));
-                ctx.strokeStyle = `rgb(15, ${greenVal}, 20)`;
+                let greenVal = Math.max(20, 95 - (dist * 2.2));
+                ctx.strokeStyle = `rgb(12, ${greenVal}, 18)`;
             } else {
-                let rValue = Math.max(10, 140 - (dist * 10));
+                let rValue = Math.max(10, 140 - (dist * 9));
                 ctx.strokeStyle = `rgb(${rValue}, 12, 12)`;
             }
         } else if (hit === 3) {
-            // Renders structural trunk pillars for forest objects
-            let trunkDim = Math.max(15, 75 - (dist * 3));
-            ctx.strokeStyle = `rgb(${trunkDim}, ${trunkDim * 0.6}, 15)`;
+            let trunkDim = Math.max(12, 70 - (dist * 1.5));
+            ctx.strokeStyle = `rgb(${trunkDim}, ${trunkDim * 0.6}, 12)`;
         } else {
-            let greyValue = Math.max(8, 70 - (dist * 5));
+            let greyValue = Math.max(8, 70 - (dist * 4));
             ctx.strokeStyle = `rgb(${greyValue}, ${greyValue}, ${greyValue})`;
         }
         ctx.beginPath(); ctx.moveTo(i, horizon - h/2); ctx.lineTo(i, horizon + h/2); ctx.stroke();
     }
 
-    // Consolidated Billboard Rendering pipeline
+    // Consolidated Billboard Rendering Matrix
     let sprites = [
         ...enemies.map(e => ({...e, type: 'enemy'})), 
-        ...teammates.map(t => ({...t, type: 'teammate', scale: 0.95})),
+        ...teammates.map(t => ({...t, type: 'teammate', scale: 1.65})), // SCALE MODIFIED: Made teammates thick, massive robots
         ...projectiles.map(p => ({...p, type: 'projectile', scale: 0.15})),
         ...grenades.map(g => ({...g, type: 'grenade', scale: 0.3})),
-        ...environmentObjects.map(o => ({...o, type: 'tree_canopy', scale: 2.2}))
+        ...environmentObjects.map(o => ({...o, type: 'tree_canopy', scale: 2.8}))
     ];
     sprites.sort((a,b) => Math.hypot(b.x-player.x, b.y-player.y) - Math.hypot(a.x-player.x, a.y-player.y));
 
@@ -1902,55 +1921,67 @@ function draw() {
                         scatter = progress * (spriteSize * 0.4);        
                     }
 
-                    // System Skin Color configuration matrices
                     let armorColor = "#e0e0d5";
                     if (s.type === 'teammate') {
-                        armorColor = s.hitFlash > 0 ? "#fff" : "#2a2b30"; // Gunmetal Black/Grey Core colors
+                        armorColor = s.hitFlash > 0 ? "#fff" : "#1e1f22"; // Dense gunmetal tone base mapping
                     } else {
                         armorColor = s.hitFlash > 0 ? "#fff" : (s.isBoss ? "#556255" : "#e0e0d5");
                     }
                     ctx.fillStyle = armorColor;
 
-                    // Compute Frame Geometry blocks
-                    ctx.fillRect(xPos - spriteSize/10 + (scatter * 0.2), baseLine - spriteSize * 0.95 + collapseOffset, spriteSize/5, spriteSize/6);
-                    ctx.fillRect(xPos - spriteSize/14 + (scatter * 0.2), baseLine - spriteSize * 0.79 + collapseOffset, spriteSize/7, spriteSize/12);
+                    if (s.type === 'teammate') {
+                        // RENDERING MODIFIED: Thick, big heavy robot frame layout geometry configurations
+                        let boxW = spriteSize * 0.45; // Substantially widened core structural dimensions
+                        ctx.fillRect(xPos - boxW/2, baseLine - spriteSize * 0.88 + collapseOffset, boxW, spriteSize * 0.65); // Bulk central casing block
+                        
+                        // Heavy shoulder plating caps
+                        ctx.fillStyle = "#2d2f34";
+                        ctx.fillRect(xPos - boxW * 0.65, baseLine - spriteSize * 0.88 + collapseOffset, boxW * 0.3, spriteSize * 0.25);
+                        ctx.fillRect(xPos + boxW * 0.35, baseLine - spriteSize * 0.88 + collapseOffset, boxW * 0.3, spriteSize * 0.25);
 
-                    // Sensor Optics configuration pass
-                    ctx.fillStyle = s.type === 'teammate' ? "#31d7ff" : "#000";
-                    ctx.fillRect(xPos - spriteSize/18, baseLine - spriteSize * 0.88 + collapseOffset, spriteSize/35, spriteSize/35); 
-                    ctx.fillRect(xPos + spriteSize/35, baseLine - spriteSize * 0.88 + collapseOffset, spriteSize/35, spriteSize/35); 
+                        // Dense mechanical reinforced head casing block
+                        ctx.fillStyle = armorColor;
+                        ctx.fillRect(xPos - spriteSize * 0.14, baseLine - spriteSize * 1.05 + collapseOffset, spriteSize * 0.28, spriteSize * 0.18);
+                        
+                        // Dual horizontal cyan visor configurations
+                        ctx.fillStyle = "#31d7ff";
+                        ctx.fillRect(xPos - spriteSize * 0.09, baseLine - spriteSize * 0.98 + collapseOffset, spriteSize * 0.18, spriteSize * 0.03);
 
-                    // Core chassis plate elements
-                    ctx.fillStyle = armorColor;
-                    ctx.fillRect(xPos - spriteSize/35, baseLine - spriteSize * 0.7 + collapseOffset, spriteSize/17.5, spriteSize/2);
-                    
-                    // Layer horizontal rib scaffolding
-                    ctx.fillRect(xPos - spriteSize/5 - scatter, baseLine - spriteSize * 0.7 + collapseOffset, spriteSize/2.5, spriteSize/35); 
-                    ctx.fillRect(xPos - spriteSize/4.4 + scatter, baseLine - spriteSize * 0.61 + collapseOffset, spriteSize/2.25, spriteSize/35); 
-                    
-                    // Synthetic Armaments drawing logic 
-                    ctx.save();
-                    ctx.translate(xPos - spriteSize/6, baseLine - spriteSize * 0.55 + collapseOffset);
-                    ctx.fillStyle = s.type === 'teammate' ? "#111" : "#1c1c1f";
-                    ctx.fillRect(0, 0, spriteSize/4, spriteSize/15); // Rifle frame body assembly
-                    ctx.fillStyle = "#050505";
-                    ctx.fillRect(-spriteSize/4.3, 0, spriteSize/4, spriteSize/35);
-                    ctx.restore();
+                        // Massive heavy plasma weapon assembly line block
+                        ctx.fillStyle = "#0a0a0c";
+                        ctx.fillRect(xPos - spriteSize * 0.3, baseLine - spriteSize * 0.52 + collapseOffset, spriteSize * 0.6, spriteSize * 0.12);
+                        
+                        // Sturdy thick hydraulic leg braces
+                        ctx.fillStyle = "#151618";
+                        ctx.fillRect(xPos - boxW * 0.35, baseLine - spriteSize * 0.23, boxW * 0.25, spriteSize * 0.23);
+                        ctx.fillRect(xPos + boxW * 0.1, baseLine - spriteSize * 0.23, boxW * 0.25, spriteSize * 0.23);
+                    } else {
+                        // Standard regular baseline structural configuration layouts for enemy wave bots
+                        ctx.fillRect(xPos - spriteSize/10 + (scatter * 0.2), baseLine - spriteSize * 0.95 + collapseOffset, spriteSize/5, spriteSize/6);
+                        ctx.fillRect(xPos - spriteSize/14 + (scatter * 0.2), baseLine - spriteSize * 0.79 + collapseOffset, spriteSize/7, spriteSize/12);
+                        ctx.fillRect(xPos - spriteSize/35, baseLine - spriteSize * 0.7 + collapseOffset, spriteSize/17.5, spriteSize/2);
+                        ctx.fillRect(xPos - spriteSize/5 - scatter, baseLine - spriteSize * 0.7 + collapseOffset, spriteSize/2.5, spriteSize/35); 
+                        ctx.fillRect(xPos - spriteSize/4.4 + scatter, baseLine - spriteSize * 0.61 + collapseOffset, spriteSize/2.25, spriteSize/35); 
+                        
+                        ctx.save();
+                        ctx.translate(xPos - spriteSize/6, baseLine - spriteSize * 0.55 + collapseOffset);
+                        ctx.fillStyle = "#1c1c1f";
+                        ctx.fillRect(0, 0, spriteSize/4, spriteSize/15); 
+                        ctx.restore();
 
-                    // Kinetic Support Structs (Leg nodes)
-                    let legSwing = s.isDying ? 0 : Math.sin(Date.now() * 0.01) * (spriteSize / 6);
-                    ctx.fillRect(xPos - spriteSize/7 - scatter, baseLine - spriteSize * 0.23, spriteSize/45, spriteSize/4 + legSwing);
-                    ctx.fillRect(xPos + spriteSize/9 + scatter, baseLine - spriteSize * 0.23, spriteSize/45, spriteSize/4 - legSwing);
+                        let legSwing = s.isDying ? 0 : Math.sin(Date.now() * 0.01) * (spriteSize / 6);
+                        ctx.fillRect(xPos - spriteSize/7 - scatter, baseLine - spriteSize * 0.23, spriteSize/45, spriteSize/4 + legSwing);
+                        ctx.fillRect(xPos + spriteSize/9 + scatter, baseLine - spriteSize * 0.23, spriteSize/45, spriteSize/4 - legSwing);
+                    }
 
-                    // Health Interface Billboard render pass
+                    // Health HUD Interface Bar setup display
                     if (!s.isDying) {
-                        ctx.fillStyle = "#111"; ctx.fillRect(xPos - 30, baseLine - spriteSize * 1.12, 60, 5);
-                        // Allied forces receive isolated Blue structural reads, hostiles get red/green scalings
+                        let barW = s.type === 'teammate' ? 80 : 60; // Extra length on health display bar for heavy units
+                        ctx.fillStyle = "#111"; ctx.fillRect(xPos - barW/2, baseLine - spriteSize * 1.15, barW, 6);
                         ctx.fillStyle = s.type === 'teammate' ? "var(--regen-blue)" : (s.isBoss ? "#ff4500" : "#00ff41"); 
-                        ctx.fillRect(xPos - 30, baseLine - spriteSize * 1.12, 60 * (s.health / s.maxHealth), 5);
+                        ctx.fillRect(xPos - barW/2, baseLine - spriteSize * 1.15, barW * (s.health / s.maxHealth), 6);
                     }
                 } else if (s.type === 'tree_canopy') {
-                    // Procedural Foliage generation logic
                     ctx.fillStyle = "#1e4620";
                     ctx.beginPath();
                     ctx.moveTo(xPos, baseLine - spriteSize * 1.2);
@@ -1983,7 +2014,6 @@ function draw() {
 btnUprising.addEventListener('click', (e) => { e.stopPropagation(); if (gameState === 'menu') selectDifficultyMode('uprising'); });
 btnTDM.addEventListener('click', (e) => { e.stopPropagation(); if (gameState === 'menu') selectDifficultyMode('tdm'); });
 
-// Screen interface click binding connections
 document.getElementById('btn-diff-normal').addEventListener('click', (e) => { e.stopPropagation(); startNewGame('Normal'); });
 document.getElementById('btn-diff-medium').addEventListener('click', (e) => { e.stopPropagation(); startNewGame('Medium'); });
 document.getElementById('btn-diff-hard').addEventListener('click', (e) => { e.stopPropagation(); startNewGame('Hard'); });
@@ -2014,7 +2044,7 @@ document.addEventListener('mouseup', (e) => { if (gameState === 'playing') isFir
 
 document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === canvas && gameState === 'playing') {
-        player.dir += e.movementX * 0.0025;
+        player.dir += e.movementX * 0.0022;
         player.pitch = Math.max(-200, Math.min(200, player.pitch - e.movementY * 0.8));
         if (!player.reloading && !player.isMeleeSwinging && !player.isHealing) {
             weaponWrap.style.transform = `translateX(-50%) translateY(${player.pitch * -0.15}px)`;
