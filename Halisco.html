@@ -60,7 +60,6 @@
             transition: none;
         }
 
-        /* Healing border screen flash overlay */
         #heal-flash-vignette {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -119,7 +118,7 @@
             flex-direction: column;
             justify-content: center;
             gap: 12px;
-            min-width: 220px;
+            min-width: 240px;
             box-shadow: 0 0 15px rgba(0,0,0,0.8);
         }
 
@@ -350,7 +349,6 @@
             transform: rotate(-15deg) scale(1.1);
         }
 
-        /* New structural anchor container for the First-Person Medkit Animation */
         #medkit-use-wrapper {
             position: absolute;
             bottom: -350px;
@@ -444,12 +442,16 @@
             font-weight: 900;
         }
 
-        #menu-options-container {
+        #menu-options-container, #difficulty-options-container {
             display: flex;
             flex-direction: column;
             gap: 20px;
             z-index: 105;
             width: 380px;
+        }
+
+        #difficulty-options-container {
+            display: none; /* Controlled via JS */
         }
 
         .menu-btn {
@@ -477,6 +479,12 @@
             box-shadow: 0 0 25px rgba(0, 255, 65, 0.5);
             transform: scale(1.04);
         }
+
+        /* Distinct thematic colors for difficulty settings */
+        #btn-diff-normal:hover { border-color: #00ff41; box-shadow: 0 0 25px rgba(0, 255, 65, 0.4); background: rgba(0, 255, 65, 0.08); color: #00ff41;}
+        #btn-diff-medium:hover { border-color: #ffaa00; box-shadow: 0 0 25px rgba(255, 170, 0, 0.4); background: rgba(255, 170, 0, 0.08); color: #ffaa00;}
+        #btn-diff-hard:hover { border-color: #ff5500; box-shadow: 0 0 25px rgba(255, 85, 0, 0.4); background: rgba(255, 85, 0, 0.08); color: #ff5500;}
+        #btn-diff-impossible:hover { border-color: #ff3131; box-shadow: 0 0 25px rgba(255, 49, 49, 0.5); background: rgba(255, 49, 49, 0.1); color: #ff3131;}
 
         .menu-btn.locked-mode {
             color: #333;
@@ -519,6 +527,13 @@
                 <button class="menu-btn locked-mode" disabled>Settings</button>
             </div>
 
+            <div id="difficulty-options-container">
+                <button class="menu-btn" id="btn-diff-normal">Normal</button>
+                <button class="menu-btn" id="btn-diff-medium">Medium</button>
+                <button class="menu-btn" id="btn-diff-hard">Hard</button>
+                <button class="menu-btn" id="btn-diff-impossible">Impossible</button>
+            </div>
+
             <p id="death-notice-sub" class="blink">CLICK TO GO BACK TO THE MAIN MENU</p>
         </div>
         
@@ -526,6 +541,7 @@
         
         <div id="top-right-hud">
             <div id="hud-stats">
+                <div class="hud-line"><span class="hud-label">RISK LEVEL:</span><span id="hud-diff" class="hud-val">-</span></div>
                 <div class="hud-line"><span class="hud-label">WAVE:</span><span id="hud-wave" class="hud-val">1/4</span></div>
                 <div class="hud-line"><span class="hud-label">KILLS:</span><span id="hud-kills" class="hud-val">0</span></div>
                 <div class="hud-line"><span class="hud-label">REMAINING:</span><span id="hud-remain" class="hud-val">10</span></div>
@@ -594,6 +610,7 @@ const muzzle = document.getElementById('muzzle-flash');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const menuOptionsContainer = document.getElementById('menu-options-container');
+const difficultyOptionsContainer = document.getElementById('difficulty-options-container');
 const deathNoticeSub = document.getElementById('death-notice-sub');
 const btnUprising = document.getElementById('btn-uprising');
 const crosshair = document.getElementById('crosshair');
@@ -623,6 +640,15 @@ let vignetteTimeout = null;
 let menuAshArray = [];
 let zBuffer = [];
 
+// Track active difficulty state modifiers
+let selectedDifficulty = 'Normal'; 
+const difficultyModifiers = {
+    'Normal':     { extraHealth: 0,  fireRateMultiplier: 1.0,   labelColor: "var(--tactical-green)" },
+    'Medium':     { extraHealth: 30, fireRateMultiplier: 0.82,  labelColor: "#ffaa00" },
+    'Hard':       { extraHealth: 45, fireRateMultiplier: 0.70,  labelColor: "#ff5500" },
+    'Impossible': { extraHealth: 75, fireRateMultiplier: 0.52,  labelColor: "#ff3131" }
+};
+
 const BASE_ENEMIES = 10;
 const MAX_WAVES = 4;
 const MAP_SIZE = 16;
@@ -640,7 +666,6 @@ const SVG_GLOVE_FRAGMENTS = `
     <rect x="106" y="114" width="9" height="15" fill="var(--glove-base)" rx="2"/>
 `;
 
-// Left glove design mirrored/shifted specifically for holding utility items
 const SVG_LEFT_GLOVE_FRAGMENTS = `
     <path d="M 118 125 L 128 200 L 68 200 L 86 125 Z" fill="var(--glove-base)" stroke="#111" stroke-width="1"/>
     <polygon points="116,140 106,195 94,195 90,140" fill="var(--glove-plate)"/>
@@ -691,7 +716,6 @@ const MEDKIT_SVG_MARKUP = `
     <rect x="83" y="94" width="34" height="12" fill="var(--tactical-green)" rx="1" />
 `;
 
-// FP Medkit uses two tactical gloves displaying the active healing inventory
 const FP_MEDKIT_USE_MARKUP = `
     <g transform="translate(0, 20)">
         <rect x="55" y="45" width="90" height="90" fill="#1c1c1f" stroke="#333" stroke-width="1.5" rx="10" />
@@ -825,6 +849,7 @@ function returnToMainMenu() {
     overlay.style.display = 'flex';
     
     menuOptionsContainer.style.display = 'flex';
+    difficultyOptionsContainer.style.display = 'none';
     deathNoticeSub.style.display = 'none';
 
     overlayTitle.innerText = "HALISCO";
@@ -832,7 +857,14 @@ function returnToMainMenu() {
     overlayTitle.style.textShadow = "0 0 35px rgba(153, 0, 0, 0.95), 0 0 50px rgba(0, 0, 0, 0.9)";
 }
 
-function startNewGame() {
+function selectDifficultyMode() {
+    menuOptionsContainer.style.display = 'none';
+    difficultyOptionsContainer.style.display = 'flex';
+    overlayTitle.innerText = "SELECT RISK LEVEL";
+}
+
+function startNewGame(difficultyChoice) {
+    selectedDifficulty = difficultyChoice;
     gameContainer.style.cursor = 'pointer';
     wave = 1;
     killsInWave = 0;
@@ -901,10 +933,14 @@ function spawnEnemy(isBoss = false) {
     
     let isMelee = !isBoss && (Math.random() < 0.25);
 
+    // Apply scaling based on chosen difficulty settings
+    const activeMod = difficultyModifiers[selectedDifficulty];
+    let baseEnemyHealth = isBoss ? 1000 : (100 + activeMod.extraHealth);
+
     enemies.push({ 
         x: ex, y: ey, 
-        health: isBoss ? 1000 : 100, 
-        maxHealth: isBoss ? 1000 : 100,
+        health: baseEnemyHealth, 
+        maxHealth: baseEnemyHealth,
         lastShot: Date.now() + (Math.random() * 2000), 
         hitFlash: 0, 
         isFiring: false,
@@ -962,12 +998,10 @@ function useMedkit() {
     isFiringContinuous = false;
     player.lastMedkitTime = now;
 
-    // Bring weapons down out of view
     const pitchOffset = player.pitch * -0.15;
     weaponWrap.style.transition = "transform 0.25s ease-in";
     weaponWrap.style.transform = `translateX(-50%) translateY(${300 + pitchOffset}px)`;
 
-    // Play visual first person medkit interaction animation sequences
     setTimeout(() => {
         medkitUseWrap.classList.add('using');
         
@@ -976,7 +1010,6 @@ function useMedkit() {
             triggerVoice("Armor integrity structural integrity restored");
             showNotification("ARMOR RECONSTRUCTED", "var(--tactical-green)");
             
-            // Trigger slow screen flash green vignette animation sequence
             healFlashVignette.classList.remove('healing-flash-active');
             void healFlashVignette.offsetWidth; 
             healFlashVignette.classList.add('healing-flash-active');
@@ -1043,6 +1076,11 @@ function updateUI() {
         document.getElementById('hud-ammo').innerText = `MELEE`;
     }
     
+    const activeMod = difficultyModifiers[selectedDifficulty];
+    const diffDisplay = document.getElementById('hud-diff');
+    diffDisplay.innerText = selectedDifficulty;
+    diffDisplay.style.color = activeMod.labelColor;
+
     document.getElementById('hud-wave').innerText = `${wave}/${MAX_WAVES}`;
     document.getElementById('hud-kills').innerText = killsInWave;
     document.getElementById('hud-remain').innerText = Math.max(0, remainingSkeletons);
@@ -1053,7 +1091,6 @@ function updateUI() {
 function updateAuxiliaryCooldowns() {
     const now = Date.now();
     
-    // Update Grenade Aux text
     const grenadeElapsed = now - player.lastGrenadeTime;
     if (grenadeElapsed < player.grenadeCooldown) {
         const grenadeLeft = ((player.grenadeCooldown - grenadeElapsed) / 1000).toFixed(1);
@@ -1064,7 +1101,6 @@ function updateAuxiliaryCooldowns() {
         cooldownStatus.className = "status-ready";
     }
 
-    // Update Medkit HUD Circle Cooldown Overlay
     const medkitElapsed = now - player.lastMedkitTime;
     if (medkitElapsed < player.medkitCooldown) {
         const medkitLeft = Math.ceil((player.medkitCooldown - medkitElapsed) / 1000);
@@ -1078,7 +1114,7 @@ function updateAuxiliaryCooldowns() {
 }
 
 function registerPlayerDamage(amount) {
-    if (player.isHealing) return; // Add short invulnerability frames during reconstruction sequence
+    if (player.isHealing) return; 
     player.health -= amount;
     player.lastDamageTime = Date.now();
     
@@ -1125,8 +1161,9 @@ function checkGameOver() {
         centerReloadHUD.style.display = 'none';
         
         menuOptionsContainer.style.display = 'none';
+        difficultyOptionsContainer.style.display = 'none';
         deathNoticeSub.style.display = 'block';
-        deathNoticeSub.innerText = "click to go back to the main menu";
+        deathNoticeSub.innerText = "CLICK TO GO BACK TO THE MAIN MENU";
 
         overlayTitle.innerText = "You're dead";
         overlayTitle.style.color = "var(--damage-red)";
@@ -1281,7 +1318,6 @@ function throwGrenade() {
     if (now - player.lastGrenadeTime < player.grenadeCooldown || player.isHealing) return; 
 
     player.lastGrenadeTime = now;
-    
     grenadeArmWrap.classList.add('throwing');
     
     setTimeout(() => {
@@ -1352,6 +1388,7 @@ function checkWaveProgress() {
             centerReloadHUD.style.display = 'none';
             
             menuOptionsContainer.style.display = 'none';
+            difficultyOptionsContainer.style.display = 'none';
             deathNoticeSub.style.display = 'block';
             deathNoticeSub.innerText = "CLICK TO GO BACK TO THE MAIN MENU";
 
@@ -1471,7 +1508,10 @@ function update() {
                 registerPlayerDamage(15);
             }
         } else {
-            let fireRate = en.isBoss ? 800 : (3000 - (wave * 200));
+            // Apply unique attack rhythm modifiers relative to active risk level
+            const activeMod = difficultyModifiers[selectedDifficulty];
+            let fireRate = en.isBoss ? 800 : ((3000 - (wave * 200)) * activeMod.fireRateMultiplier);
+            
             if (Date.now() - en.lastShot > fireRate) {
                 en.isFiring = true;
                 en.lastShot = Date.now();
@@ -1710,12 +1750,19 @@ function draw() {
     drawMinimap();
 }
 
+// Route main game button to show sub menu selection instead
 btnUprising.addEventListener('click', (e) => {
     e.stopPropagation(); 
     if (gameState === 'menu') {
-        startNewGame();
+        selectDifficultyMode();
     }
 });
+
+// Setup difficulty click triggers to start matches
+document.getElementById('btn-diff-normal').addEventListener('click', (e) => { e.stopPropagation(); startNewGame('Normal'); });
+document.getElementById('btn-diff-medium').addEventListener('click', (e) => { e.stopPropagation(); startNewGame('Medium'); });
+document.getElementById('btn-diff-hard').addEventListener('click', (e) => { e.stopPropagation(); startNewGame('Hard'); });
+document.getElementById('btn-diff-impossible').addEventListener('click', (e) => { e.stopPropagation(); startNewGame('Impossible'); });
 
 document.addEventListener('mousedown', (e) => {
     if (gameState === 'over' || gameState === 'win') {
