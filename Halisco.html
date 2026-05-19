@@ -480,7 +480,6 @@
             transform: scale(1.04);
         }
 
-        /* Distinct thematic colors for difficulty settings */
         #btn-diff-normal:hover { border-color: #00ff41; box-shadow: 0 0 25px rgba(0, 255, 65, 0.4); background: rgba(0, 255, 65, 0.08); color: #00ff41;}
         #btn-diff-medium:hover { border-color: #ffaa00; box-shadow: 0 0 25px rgba(255, 170, 0, 0.4); background: rgba(255, 170, 0, 0.08); color: #ffaa00;}
         #btn-diff-hard:hover { border-color: #ff5500; box-shadow: 0 0 25px rgba(255, 85, 0, 0.4); background: rgba(255, 85, 0, 0.08); color: #ff5500;}
@@ -640,7 +639,10 @@ let vignetteTimeout = null;
 let menuAshArray = [];
 let zBuffer = [];
 
-// Track active difficulty state modifiers
+// NEW MAP & HEIGHT DESIGN MODIFIERS
+const ENEMY_HEIGHT_SCALE = 0.72; // Slightly shorter threat models to match roof clearance
+const ENEMY_Y_OFFSET = 0.14;     // Vertical offset alignment factor on the floor layout
+
 let selectedDifficulty = 'Normal'; 
 const difficultyModifiers = {
     'Normal':     { extraHealth: 0,  fireRateMultiplier: 1.0,   labelColor: "var(--tactical-green)" },
@@ -821,17 +823,60 @@ function handleMenuParticles() {
     pctx.globalCompositeOperation = 'source-over';
 }
 
-function getEnemiesForWave(w) {
-    if (w === 4) return 1;
-    return BASE_ENEMIES + ((w - 1) * 5);
+function generateMap() {
+    worldMap = [];
+    for (let x = 0; x < MAP_SIZE; x++) {
+        worldMap[x] = [];
+        for (let y = 0; y < MAP_SIZE; y++) {
+            if (x === 0 || x === MAP_SIZE - 1 || y === 0 || y === MAP_SIZE - 1) {
+                worldMap[x][y] = 1; // Perimeter grid walls
+            } else if (Math.random() < 0.15 && (x > 3 || y > 3)) {
+                worldMap[x][y] = 1; // Obstacle points
+            } else {
+                worldMap[x][y] = 0;
+            }
+        }
+    }
 }
 
-function triggerVoice(text) {
-    const speech = new SpeechSynthesisUtterance(text);
-    speech.rate = 1.1; 
-    speech.pitch = 0.7; 
-    speech.volume = 0.5;
-    window.speechSynthesis.speak(speech);
+function startWave() {
+    enemies = [];
+    enemiesSpawnedInWave = getEnemiesForWave(wave);
+    killsInWave = 0;
+    
+    document.getElementById('hud-wave').innerText = `${wave}/${MAX_WAVES}`;
+    document.getElementById('hud-remain').innerText = enemiesSpawnedInWave;
+    document.getElementById('hud-diff').innerText = selectedDifficulty.toUpperCase();
+    document.getElementById('hud-diff').style.color = difficultyModifiers[selectedDifficulty].labelColor;
+
+    showNotification(`WAVE ${wave} ARRIVING`, "var(--damage-orange)");
+    triggerVoice(`Wave ${wave} initialized.`);
+
+    let count = 0;
+    while (count < enemiesSpawnedInWave) {
+        let rx = Math.floor(Math.random() * (MAP_SIZE - 2)) + 1;
+        let ry = Math.floor(Math.random() * (MAP_SIZE - 2)) + 1;
+        if (worldMap[rx][ry] === 0 && (Math.abs(rx - player.x) > 2 || Math.abs(ry - player.y) > 2)) {
+            enemies.push({
+                x: rx + 0.5,
+                y: ry + 0.5,
+                health: 100 + (difficultyModifiers[selectedDifficulty].extraHealth),
+                maxHealth: 100 + (difficultyModifiers[selectedDifficulty].extraHealth),
+                speed: 0.02 + (wave * 0.005)
+            });
+            count++;
+        }
+    }
+}
+
+function renderEquippedWeapon() {
+    if (player.currentWeapon === 'gun') {
+        weaponSvg.innerHTML = GUN_SVG_MARKUP;
+        swapPreviewCircle.innerHTML = `<svg viewBox="0 0 200 200">${MACHETE_SVG_MARKUP}</svg>`;
+    } else {
+        weaponSvg.innerHTML = MACHETE_SVG_MARKUP;
+        swapPreviewCircle.innerHTML = `<svg viewBox="0 0 200 200">${GUN_SVG_MARKUP}</svg>`;
+    }
 }
 
 function showNotification(text, color = "var(--tactical-green)") {
@@ -841,20 +886,263 @@ function showNotification(text, color = "var(--tactical-green)") {
     setTimeout(() => { notify.style.display = 'none'; }, 3000);
 }
 
-function returnToMainMenu() {
-    gameContainer.classList.remove('death-border');
-    gameContainer.style.cursor = 'default';
-    gameState = 'menu';
-    pCanvas.style.display = 'block';
-    overlay.style.display = 'flex';
-    
-    menuOptionsContainer.style.display = 'flex';
-    difficultyOptionsContainer.style.display = 'none';
-    deathNoticeSub.style.display = 'none';
+function triggerVoice(text) {
+    if ('speechSynthesis' in window) {
+        const speech = new SpeechSynthesisUtterance(text);
+        speech.rate = 1.1; 
+        speech.pitch = 0.7; 
+        speech.volume = 0.4;
+        window.speechSynthesis.speak(speech);
+    }
+}
 
-    overlayTitle.innerText = "HALISCO";
-    overlayTitle.style.color = "#d1c7bd";
-    overlayTitle.style.textShadow = "0 0 35px rgba(153, 0, 0, 0.95), 0 0 50px rgba(0, 0, 0, 0.9)";
+// CORE 3D SCENE RAYCASTER INCLUDING ROOF/CEILING RENDER LINES
+function drawScene3D() {
+    const halfHeight = canvas.height / 2;
+    const pitchOffset = player.pitch;
+
+    for (let x = 0; x < canvas.width; x++) {
+        let cameraX = 2 * x / canvas.width - 1;
+        let rayDirX = Math.cos(player.dir) + Math.sin(player.dir) * cameraX;
+        let rayDirY = Math.sin(player.dir) - Math.cos(player.dir) * cameraX;
+
+        let mapX = Math.floor(player.x);
+        let mapY = Math.floor(player.y);
+
+        let sideDistX, sideDistY;
+        let deltaDistX = (rayDirX === 0) ? 1e30 : Math.abs(1 / rayDirX);
+        let deltaDistY = (rayDirY === 0) ? 1e30 : Math.abs(1 / rayDirY);
+        let perpWallDist;
+
+        let stepX, stepY;
+        let hit = 0;
+        let side;
+
+        if (rayDirX < 0) {
+            stepX = -1;
+            sideDistX = (player.x - mapX) * deltaDistX;
+        } else {
+            stepX = 1;
+            sideDistX = (mapX + 1.0 - player.x) * deltaDistX;
+        }
+        if (rayDirY < 0) {
+            stepY = -1;
+            sideDistY = (player.y - mapY) * deltaDistY;
+        } else {
+            stepY = 1;
+            sideDistY = (mapY + 1.0 - player.y) * deltaDistY;
+        }
+
+        while (hit === 0) {
+            if (sideDistX < sideDistY) {
+                sideDistX += deltaDistX;
+                mapX += stepX;
+                side = 0;
+            } else {
+                sideDistY += deltaDistY;
+                mapY += stepY;
+                side = 1;
+            }
+            if (worldMap[mapX] && worldMap[mapX][mapY] > 0) hit = 1;
+        }
+
+        if (side === 0) perpWallDist = (sideDistX - deltaDistX);
+        else           perpWallDist = (sideDistY - deltaDistY);
+        if (perpWallDist <= 0) perpWallDist = 0.01;
+
+        let lineHeight = Math.floor(canvas.height / perpWallDist);
+        let wallTop = Math.floor(halfHeight - lineHeight / 2) + pitchOffset;
+        let wallBottom = Math.floor(halfHeight + lineHeight / 2) + pitchOffset;
+
+        // --- ROOF / CEILING SYSTEM ---
+        let ceilingGradient = ctx.createLinearGradient(x, 0, x, Math.max(0, wallTop));
+        ceilingGradient.addColorStop(0, '#020b04'); // Dark metallic shadow depths
+        ceilingGradient.addColorStop(1, '#08210d'); // Ambient light illumination closer to walls
+        ctx.fillStyle = ceilingGradient;
+        ctx.fillRect(x, 0, 1, Math.max(0, wallTop));
+
+        // --- FLOOR LAYER ---
+        ctx.fillStyle = '#060608';
+        if(wallBottom < canvas.height) {
+            ctx.fillRect(x, wallBottom, 1, canvas.height - wallBottom);
+        }
+
+        // --- WALL MATRIX MAPPING ---
+        ctx.fillStyle = (side === 1) ? '#00b32d' : 'var(--tactical-green)';
+        ctx.fillRect(x, Math.max(0, wallTop), 1, Math.min(canvas.height, wallBottom) - Math.max(0, wallTop));
+
+        zBuffer[x] = perpWallDist;
+    }
+}
+
+// 3D ENEMY RENDERING FOR SHORTER MODEL ADJUSTMENTS
+function drawEnemies3D() {
+    enemies.forEach(e => {
+        e.dist = Math.hypot(e.x - player.x, e.y - player.y);
+    });
+    enemies.sort((a, b) => b.dist - a.dist);
+
+    enemies.forEach(enemy => {
+        let spriteX = enemy.x - player.x;
+        let spriteY = enemy.y - player.y;
+
+        let invDet = 1.0 / (Math.cos(player.dir) * Math.sin(player.dir) - Math.sin(player.dir) * Math.cos(player.dir));
+        
+        // Transform vector orientations
+        let cos = Math.cos(-player.dir);
+        let sin = Math.sin(-player.dir);
+        let rotX = spriteX * cos - spriteY * sin;
+        let rotY = spriteX * sin + spriteY * cos;
+
+        if (rotY > 0.2) {
+            let spriteScreenX = Math.floor((canvas.width / 2) * (1 + rotX / rotY));
+            
+            // Scaled Down Enemy Metrics to pass clearly underneath structural roof layers
+            let baseHeightWidth = Math.abs(Math.floor(canvas.height / rotY));
+            let spriteHeight = baseHeightWidth * ENEMY_HEIGHT_SCALE;
+            let spriteWidth = baseHeightWidth * ENEMY_HEIGHT_SCALE;
+
+            let drawStartY = Math.floor(canvas.height / 2 - spriteHeight / 2) + player.pitch + Math.floor(baseHeightWidth * ENEMY_Y_OFFSET);
+            let drawStartX = Math.floor(spriteScreenX - spriteWidth / 2);
+
+            let drawEndX = drawStartX + spriteWidth;
+
+            for (let stripe = drawStartX; stripe < drawEndX; stripe++) {
+                if (stripe > 0 && stripe < canvas.width && rotY < zBuffer[stripe]) {
+                    // Display threat profile inside safe depth calculations
+                    let healthRatio = enemy.health / enemy.maxHealth;
+                    ctx.fillStyle = healthRatio > 0.4 ? 'var(--damage-red)' : 'var(--bloody-red)';
+                    ctx.fillRect(stripe, drawStartY, 1, spriteHeight);
+
+                    // Tiny tactical scan visor line overlay
+                    ctx.fillStyle = '#00ffff';
+                    ctx.fillRect(stripe, drawStartY + Math.floor(spriteHeight * 0.22), 1, Math.max(1, Math.floor(spriteHeight * 0.06)));
+                }
+            }
+        }
+    });
+}
+
+function drawMinimap() {
+    mctx.fillStyle = 'rgba(5, 5, 5, 0.85)';
+    mctx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+
+    let blockWidth = minimapCanvas.width / MAP_SIZE;
+    let blockHeight = minimapCanvas.height / MAP_SIZE;
+
+    for (let x = 0; x < MAP_SIZE; x++) {
+        for (let y = 0; y < MAP_SIZE; y++) {
+            if (worldMap[x] && worldMap[x][y] === 1) {
+                mctx.fillStyle = '#222';
+                mctx.fillRect(x * blockWidth, y * blockHeight, blockWidth - 0.5, blockHeight - 0.5);
+            }
+        }
+    }
+
+    // Render Enemies inside minimap
+    enemies.forEach(e => {
+        mctx.fillStyle = 'var(--damage-red)';
+        mctx.beginPath();
+        mctx.arc(e.x * blockWidth, e.y * blockHeight, 3, 0, Math.PI * 2);
+        mctx.fill();
+    });
+
+    // Render Player tracking dots
+    mctx.fillStyle = 'var(--tactical-green)';
+    mctx.beginPath();
+    mctx.arc(player.x * blockWidth, player.y * blockHeight, 4, 0, Math.PI * 2);
+    mctx.fill();
+
+    // Small line pointing forward direction
+    mctx.strokeStyle = 'var(--tactical-green)';
+    mctx.lineWidth = 2;
+    mctx.beginPath();
+    mctx.moveTo(player.x * blockWidth, player.y * blockHeight);
+    mctx.lineTo((player.x + Math.cos(player.dir) * 1.5) * blockWidth, (player.y + Math.sin(player.dir) * 1.5) * blockHeight);
+    mctx.stroke();
+}
+
+function gameLoop() {
+    if (gameState === 'playing') {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Core processing executions
+        updateMovement();
+        updateEnemiesAI();
+        drawScene3D();
+        drawEnemies3D();
+        drawMinimap();
+    } else {
+        handleMenuParticles();
+    }
+    requestAnimationFrame(gameLoop);
+}
+
+function updateMovement() {
+    let moveSpeed = player.speed;
+    let nextX = player.x;
+    let nextY = player.y;
+
+    let forwardX = Math.cos(player.dir) * moveSpeed;
+    let forwardY = Math.sin(player.dir) * moveSpeed;
+    let strafeX = Math.cos(player.dir + Math.PI / 2) * moveSpeed;
+    let strafeY = Math.sin(player.dir + Math.PI / 2) * moveSpeed;
+
+    if (keys['w'] || keys['ArrowUp'])    { nextX += forwardX; nextY += forwardY; }
+    if (keys['s'] || keys['ArrowDown'])  { nextX -= forwardX; nextY -= forwardY; }
+    if (keys['a'])                      { nextX -= strafeX; nextY -= strafeY; }
+    if (keys['d'])                      { nextX += strafeX; nextY += strafeY; }
+
+    // Sliding collision responses
+    if (worldMap[Math.floor(nextX)][Math.floor(player.y)] === 0) player.x = nextX;
+    if (worldMap[Math.floor(player.x)][Math.floor(nextY)] === 0) player.y = nextY;
+}
+
+function updateEnemiesAI() {
+    enemies.forEach(enemy => {
+        let dx = player.x - enemy.x;
+        let dy = player.y - enemy.y;
+        let dist = Math.hypot(dx, dy);
+
+        if (dist > 0.35) {
+            let angle = Math.atan2(dy, dx);
+            let nX = enemy.x + Math.cos(angle) * enemy.speed;
+            let nY = enemy.y + Math.sin(angle) * enemy.speed;
+
+            if (worldMap[Math.floor(nX)][Math.floor(enemy.y)] === 0) enemy.x = nX;
+            if (worldMap[Math.floor(enemy.x)][Math.floor(nY)] === 0) enemy.y = nY;
+        } else {
+            // Apply hit box damage constraints
+            if (Date.now() - player.lastDamageTime > 700) {
+                player.health = Math.max(0, player.health - 12);
+                player.lastDamageTime = Date.now();
+                document.getElementById('health-text').innerText = `${player.health}%`;
+                document.getElementById('health-bar-fill').style.width = `${player.health}%`;
+                
+                damageVignette.classList.add('blood-pulse');
+                setTimeout(() => damageVignette.classList.remove('blood-pulse'), 80);
+
+                if (player.health <= 0) {
+                    executeDeathSequence();
+                }
+            }
+        }
+    });
+}
+
+function executeDeathSequence() {
+    gameState = 'menu';
+    document.exitPointerLock();
+    overlay.style.display = 'flex';
+    menuOptionsContainer.style.display = 'none';
+    difficultyOptionsContainer.style.display = 'none';
+    deathNoticeSub.style.display = 'block';
+
+    overlayTitle.innerText = "CRITICAL FAILURE";
+    overlayTitle.style.color = "var(--damage-red)";
+    overlayTitle.style.textShadow = "0 0 25px rgba(255, 49, 49, 0.8)";
+    triggerVoice("System offline. Armor structural collapse.");
 }
 
 function selectDifficultyMode() {
@@ -867,24 +1155,19 @@ function startNewGame(difficultyChoice) {
     selectedDifficulty = difficultyChoice;
     gameContainer.style.cursor = 'pointer';
     wave = 1;
-    killsInWave = 0;
-    enemiesSpawnedInWave = 0;
     player.health = 100;
     player.ammo = 30;
     player.x = 2.5; player.y = 2.5;
-    player.dir = 0;
-    player.pitch = 0;
+    player.dir = 0; player.pitch = 0;
     player.lastDamageTime = Date.now();
-    player.lastGrenadeTime = 0;
-    player.lastMedkitTime = 0;
-    player.currentWeapon = 'gun';
-    player.isMeleeSwinging = false;
-    player.isHealing = false;
-    enemies = [];
-    projectiles = [];
-    grenades = [];
+
+    document.getElementById('health-text').innerText = "100%";
+    document.getElementById('health-bar-fill').style.width = "100%";
+    document.getElementById('hud-ammo').innerText = "30/30";
+
     generateMap();
     startWave();
+    
     gameState = 'playing';
     overlay.style.display = 'none';
     pCanvas.style.display = 'none';
@@ -896,920 +1179,49 @@ function startNewGame(difficultyChoice) {
     bottomLeftHUD.style.display = 'flex';
     bottomMiddleHUD.style.display = 'flex';
     bottomRightHUD.style.display = 'block';
-    centerReloadHUD.style.display = 'none';
     
     renderEquippedWeapon();
     medkitCircle.innerHTML = `<svg viewBox="0 0 200 200">${MEDKIT_SVG_MARKUP}</svg>`;
     medkitUseSvg.innerHTML = FP_MEDKIT_USE_MARKUP;
     grenadeArmSvg.innerHTML = GRENADE_ARM_MARKUP;
+    
     canvas.requestPointerLock();
-    updateUI();
 }
 
-function startWave() {
-    killsInWave = 0;
-    enemiesSpawnedInWave = 0;
-    enemies = [];
-    
-    if (wave === 4) {
-        showNotification("BOSS FIGHT", "var(--damage-red)");
-        triggerVoice("Extreme threat detected. Boss fight initiated.");
-        screenShakeTime = 300; 
-        spawnEnemy(true);
-    } else {
-        showNotification(`WAVE ${wave} ARRIVING`);
-        for(let i=0; i<6; i++) spawnEnemy();
-    }
-    updateUI();
+function returnToMainMenu() {
+    gameContainer.classList.remove('death-border');
+    gameState = 'menu';
+    pCanvas.style.display = 'block';
+    overlay.style.display = 'flex';
+    menuOptionsContainer.style.display = 'flex';
+    difficultyOptionsContainer.style.display = 'none';
+    deathNoticeSub.style.display = 'none';
+
+    overlayTitle.innerText = "HALISCO";
+    overlayTitle.style.color = "#d1c7bd";
+    overlayTitle.style.textShadow = "0 0 35px rgba(153, 0, 0, 0.95), 0 0 50px rgba(0, 0, 0, 0.9)";
 }
 
-function spawnEnemy(isBoss = false) {
-    if (enemiesSpawnedInWave >= getEnemiesForWave(wave)) return;
-    let ex, ey;
-    do {
-        ex = Math.random() * (MAP_SIZE - 2) + 1;
-        ey = Math.random() * (MAP_SIZE - 2) + 1;
-    } while (worldMap[Math.floor(ey)][Math.floor(ex)] !== 0 || Math.hypot(ex-player.x, ey-player.y) < 5);
-    
-    let isMelee = !isBoss && (Math.random() < 0.25);
-
-    // Apply scaling based on chosen difficulty settings
-    const activeMod = difficultyModifiers[selectedDifficulty];
-    let baseEnemyHealth = isBoss ? 1000 : (100 + activeMod.extraHealth);
-
-    enemies.push({ 
-        x: ex, y: ey, 
-        health: baseEnemyHealth, 
-        maxHealth: baseEnemyHealth,
-        lastShot: Date.now() + (Math.random() * 2000), 
-        hitFlash: 0, 
-        isFiring: false,
-        isBoss: isBoss,
-        isMelee: isMelee,
-        swingTime: 0,
-        isDying: false,       
-        deathTimer: 0,        
-        scale: isBoss ? 2.0 : 1.0,
-        renderX: 0,
-        renderSize: 0
-    });
-    enemiesSpawnedInWave++;
-}
-
-function renderEquippedWeapon() {
-    if (player.currentWeapon === 'gun') {
-        weaponSvg.innerHTML = GUN_SVG_MARKUP;
-        swapPreviewCircle.innerHTML = `<svg viewBox="0 0 200 200" style="transform: scale(1.15) translateY(5px);">${MACHETE_SVG_MARKUP}</svg>`;
-        crosshair.innerText = "⌖";
-    } else {
-        weaponSvg.innerHTML = MACHETE_SVG_MARKUP;
-        swapPreviewCircle.innerHTML = `<svg viewBox="0 0 200 200" style="transform: scale(0.9) translateY(12px);">${GUN_SVG_MARKUP}</svg>`;
-        crosshair.innerText = "✧";
-    }
-}
-
-function switchWeapon() {
-    if (player.reloading || player.isMeleeSwinging || player.isHealing) return;
-    
-    player.currentWeapon = (player.currentWeapon === 'gun') ? 'machete' : 'gun';
-    isFiringContinuous = false;
-    
-    const pitchOffset = player.pitch * -0.15;
-    weaponWrap.style.transition = "transform 0.15s ease-in";
-    weaponWrap.style.transform = `translateX(-50%) translateY(${250 + pitchOffset}px)`;
-    
-    setTimeout(() => {
-        renderEquippedWeapon();
-        updateUI();
-        weaponWrap.style.transition = "transform 0.15s ease-out";
-        weaponWrap.style.transform = `translateX(-50%) translateY(${pitchOffset}px)`;
-    }, 150);
-}
-
-function useMedkit() {
-    const now = Date.now();
-    if (now - player.lastMedkitTime < player.medkitCooldown || player.isHealing || player.reloading) return;
-    if (player.health >= 100) {
-        showNotification("ARMOR AT MAX CAPACITY", "var(--tactical-green)");
-        return;
-    }
-
-    player.isHealing = true;
-    isFiringContinuous = false;
-    player.lastMedkitTime = now;
-
-    const pitchOffset = player.pitch * -0.15;
-    weaponWrap.style.transition = "transform 0.25s ease-in";
-    weaponWrap.style.transform = `translateX(-50%) translateY(${300 + pitchOffset}px)`;
-
-    setTimeout(() => {
-        medkitUseWrap.classList.add('using');
-        
-        setTimeout(() => {
-            medkitUseWrap.classList.add('healing-shake');
-            triggerVoice("Armor integrity structural integrity restored");
-            showNotification("ARMOR RECONSTRUCTED", "var(--tactical-green)");
-            
-            healFlashVignette.classList.remove('healing-flash-active');
-            void healFlashVignette.offsetWidth; 
-            healFlashVignette.classList.add('healing-flash-active');
-
-            player.health = 100;
-            updateUI();
-
-            setTimeout(() => {
-                medkitUseWrap.classList.remove('healing-shake');
-                medkitUseWrap.classList.remove('using');
-                
-                setTimeout(() => {
-                    const endPitch = player.pitch * -0.15;
-                    weaponWrap.style.transition = "transform 0.25s ease-out";
-                    weaponWrap.style.transform = `translateX(-50%) translateY(${endPitch}px)`;
-                    player.isHealing = false;
-                }, 200);
-            }, 1000);
-        }, 400);
-    }, 150);
-}
-
-function updateUI() {
-    const healthPercent = Math.max(0, Math.floor(player.health));
-    const healthBarFill = document.getElementById('health-bar-fill');
-    const healthBarContainer = document.getElementById('health-bar-container');
-    const healthText = document.getElementById('health-text');
-    
-    healthBarFill.style.width = healthPercent + "%";
-    healthText.innerText = healthPercent + "%";
-
-    const isRegenerating = (Date.now() - player.lastDamageTime > 6000 && player.health < 100);
-
-    if (healthPercent >= 60) {
-        healthBarFill.style.backgroundColor = "var(--tactical-green)";
-        healthText.style.color = "var(--tactical-green)";
-    } else if (healthPercent >= 30) {
-        healthBarFill.style.backgroundColor = "var(--damage-orange)";
-        healthText.style.color = "var(--damage-orange)";
-    } else {
-        healthBarFill.style.backgroundColor = "var(--damage-red)";
-        healthText.style.color = "var(--damage-red)";
-    }
-
-    if (healthPercent < 50) {
-        bottomLeftHUD.classList.add('expanded');
-        topHUD.classList.add('shrunk');
-    } else {
-        bottomLeftHUD.classList.remove('expanded');
-        topHUD.classList.remove('shrunk');
-    }
-
-    if (isRegenerating) {
-        healthBarContainer.style.borderColor = "var(--regen-blue)";
-    } else {
-        healthBarContainer.style.borderColor = "#444";
-    }
-
-    let remainingSkeletons = getEnemiesForWave(wave) - killsInWave;
-
-    if (player.currentWeapon === 'gun') {
-        document.getElementById('hud-ammo').innerText = `${player.ammo}/30`;
-    } else {
-        document.getElementById('hud-ammo').innerText = `MELEE`;
-    }
-    
-    const activeMod = difficultyModifiers[selectedDifficulty];
-    const diffDisplay = document.getElementById('hud-diff');
-    diffDisplay.innerText = selectedDifficulty;
-    diffDisplay.style.color = activeMod.labelColor;
-
-    document.getElementById('hud-wave').innerText = `${wave}/${MAX_WAVES}`;
-    document.getElementById('hud-kills').innerText = killsInWave;
-    document.getElementById('hud-remain').innerText = Math.max(0, remainingSkeletons);
-    
-    updateAuxiliaryCooldowns();
-}
-
-function updateAuxiliaryCooldowns() {
-    const now = Date.now();
-    
-    const grenadeElapsed = now - player.lastGrenadeTime;
-    if (grenadeElapsed < player.grenadeCooldown) {
-        const grenadeLeft = ((player.grenadeCooldown - grenadeElapsed) / 1000).toFixed(1);
-        cooldownStatus.innerText = `GRENADE: ${grenadeLeft}s`;
-        cooldownStatus.className = "status-charging";
-    } else {
-        cooldownStatus.innerText = "GRENADE: READY";
-        cooldownStatus.className = "status-ready";
-    }
-
-    const medkitElapsed = now - player.lastMedkitTime;
-    if (medkitElapsed < player.medkitCooldown) {
-        const medkitLeft = Math.ceil((player.medkitCooldown - medkitElapsed) / 1000);
-        medkitCooldownText.innerText = `${medkitLeft}s`;
-        medkitCooldownText.classList.add('active');
-        medkitCircle.style.borderColor = "var(--damage-orange)";
-    } else {
-        medkitCooldownText.classList.remove('active');
-        medkitCircle.style.borderColor = "var(--tactical-green)";
-    }
-}
-
-function registerPlayerDamage(amount) {
-    if (player.isHealing) return; 
-    player.health -= amount;
-    player.lastDamageTime = Date.now();
-    
-    if (player.health < 50) {
-        damageVignette.classList.remove('blood-pulse');
-        void damageVignette.offsetWidth; 
-        damageVignette.classList.add('blood-pulse');
-        
-        clearTimeout(vignetteTimeout);
-        vignetteTimeout = setTimeout(() => {
-            damageVignette.classList.remove('blood-pulse');
-        }, 50); 
-    }
-
-    updateUI();
-    checkGameOver();
-}
-
-function handleRegeneration() {
-    const now = Date.now();
-    if (now - player.lastDamageTime > 6000) {
-        if (player.health < 100 && now - player.lastRegenTick > 1000) {
-            player.health = Math.min(100, player.health + 5); 
-            player.lastRegenTick = now;
-            updateUI();
-        }
-    }
-}
-
-function checkGameOver() {
-    if (player.health <= 0) {
-        gameState = 'over';
-        isFiringContinuous = false;
-        document.exitPointerLock();
-        
-        gameContainer.classList.add('death-border');
-        gameContainer.style.cursor = 'pointer';
-
-        overlay.style.display = 'flex';
-        topHUD.style.display = 'none';
-        bottomLeftHUD.style.display = 'none';
-        bottomMiddleHUD.style.display = 'none';
-        bottomRightHUD.style.display = 'none';
-        centerReloadHUD.style.display = 'none';
-        
-        menuOptionsContainer.style.display = 'none';
-        difficultyOptionsContainer.style.display = 'none';
-        deathNoticeSub.style.display = 'block';
-        deathNoticeSub.innerText = "CLICK TO GO BACK TO THE MAIN MENU";
-
-        overlayTitle.innerText = "You're dead";
-        overlayTitle.style.color = "var(--damage-red)";
-        overlayTitle.style.textShadow = "0 0 15px rgba(255, 0, 0, 0.7)";
-    }
-}
-
-function reload() {
-    if (player.currentWeapon !== 'gun' || player.reloading || player.isMeleeSwinging || player.isHealing) return;
-    player.reloading = true;
-    isFiringContinuous = false; 
-    triggerVoice("Reloading");
-    
-    centerReloadHUD.style.display = 'block';
-
-    const startPitch = player.pitch * -0.15;
-    weaponWrap.style.transition = "transform 0.3s ease-in";
-    weaponWrap.style.transform = `translateX(-50%) translateY(${300 + startPitch}px) rotate(15deg)`;
-    setTimeout(() => {
-        weaponWrap.style.transform = `translateX(-50%) translateY(${280 + startPitch}px) rotate(-5deg)`;
-        setTimeout(() => {
-            player.ammo = 30;
-            centerReloadHUD.style.display = 'none';
-
-            updateUI();
-            const endPitch = player.pitch * -0.15;
-            weaponWrap.style.transition = "transform 0.2s ease-out";
-            weaponWrap.style.transform = `translateX(-50%) translateY(${endPitch}px) rotate(0deg)`;
-            setTimeout(() => {
-                weaponWrap.style.transition = "transform 0.1s ease-out";
-                player.reloading = false;
-            }, 200);
-        }, 400);
-    }, 300);
-}
-
-function shoot() {
-    if (player.reloading || player.isMeleeSwinging || player.isHealing) return;
-
-    if (player.currentWeapon === 'machete') {
-        executeMacheteSwing();
-        return;
-    }
-
-    if (player.ammo <= 0) {
-        isFiringContinuous = false;
-        reload();
-        return;
-    }
-
-    player.ammo--;
-    updateUI();
-    player.pitch += 6; 
-    
-    const currentPitchOffset = player.pitch * -0.15;
-    weaponWrap.style.transition = "none";
-    weaponWrap.style.transform = `translateX(-50%) translateY(${currentPitchOffset + 10}px) scale(1.03)`;
-    setTimeout(() => {
-        weaponWrap.style.transition = "transform 0.05s ease-out";
-        weaponWrap.style.transform = `translateX(-50%) translateY(${player.pitch * -0.15}px) scale(1)`;
-    }, 30);
-
-    muzzle.style.display = 'block';
-    setTimeout(() => muzzle.style.display = 'none', 30);
-
-    evaluateHitscanDamage(15, 25);
-}
-
-function executeMacheteSwing() {
-    player.isMeleeSwinging = true;
-    isFiringContinuous = false;
-
-    const pitchOffset = player.pitch * -0.15;
-    weaponWrap.style.transition = "transform 0.08s cubic-bezier(0.15, 0.85, 0.35, 1.2)";
-    weaponWrap.style.transform = `translateX(-30%) translateY(${pitchOffset - 20}px) rotate(35deg) scale(1.15)`;
-    
-    setTimeout(() => {
-        weaponWrap.style.transition = "transform 0.05s ease-in";
-        weaponWrap.style.transform = `translateX(-70%) translateY(${pitchOffset + 40}px) rotate(-45deg) scale(1.1)`;
-        
-        evaluateHitscanDamage(1.8, 50);
-
-        setTimeout(() => {
-            weaponWrap.style.transition = "transform 0.15s ease-out";
-            weaponWrap.style.transform = `translateX(-50%) translateY(${pitchOffset}px) rotate(0deg) scale(1)`;
-            setTimeout(() => {
-                player.isMeleeSwinging = false;
-            }, 150);
-        }, 700);
-    }, 80);
-}
-
-function evaluateHitscanDamage(maxRange, damageAmount) {
-    let closestEnemy = null;
-    let closestDistance = maxRange;
-    const screenCenterX = canvas.width / 2;
-    const screenCenterY = (canvas.height / 2) + player.pitch;
-
-    enemies.forEach(en => {
-        if (en.isDying || en.renderSize <= 0) return; 
-
-        let dx = en.x - player.x, dy = en.y - player.y;
-        let dist = Math.hypot(dx, dy);
-        if (dist > closestDistance) return;
-
-        const halfWidth = en.renderSize / 2;
-        const topY = screenCenterY - (en.renderSize * 0.95);
-        const bottomY = screenCenterY + (en.renderSize * 0.25);
-
-        const withinX = screenCenterX >= (en.renderX - halfWidth) && screenCenterX <= (en.renderX + halfWidth);
-        const withinY = screenCenterY >= topY && screenCenterY <= bottomY;
-
-        if (withinX && withinY) {
-            let angleToEn = Math.atan2(dy, dx);
-            let clearShot = true;
-            for(let d = 0.2; d < dist; d += 0.2) {
-                let checkX = Math.floor(player.x + Math.cos(angleToEn) * d);
-                let checkY = Math.floor(player.y + Math.sin(angleToEn) * d);
-                if(worldMap[checkY] && worldMap[checkY][checkX] > 0) {
-                    clearShot = false; 
-                    break;
-                }
-            }
-            
-            if (clearShot) {
-                closestEnemy = en;
-                closestDistance = dist;
-            }
-        }
-    });
-
-    if (closestEnemy) {
-        if (player.currentWeapon === 'machete' && !closestEnemy.isBoss) {
-            closestEnemy.health = 0;
-        } else {
-            closestEnemy.health -= damageAmount;
-        }
-        
-        closestEnemy.hitFlash = 3;
-        if(closestEnemy.health <= 0) { 
-            closestEnemy.isDying = true;
-            closestEnemy.deathTimer = 30; 
-            killsInWave++; 
-            updateUI();
-            checkWaveProgress();
-        }
-    }
-}
-
-function throwGrenade() {
-    const now = Date.now();
-    if (now - player.lastGrenadeTime < player.grenadeCooldown || player.isHealing) return; 
-
-    player.lastGrenadeTime = now;
-    grenadeArmWrap.classList.add('throwing');
-    
-    setTimeout(() => {
-        const launchForce = 0.12;
-        grenades.push({
-            x: player.x,
-            y: player.y,
-            vx: Math.cos(player.dir) * launchForce,
-            vy: Math.sin(player.dir) * launchForce,
-            life: 45 
-        });
-        updateUI();
-        
-        setTimeout(() => {
-            grenadeArmWrap.classList.remove('throwing');
-        }, 150);
-    }, 200);
-}
-
-function processExplosion(gx, gy) {
-    screenShakeTime = 25; 
-    const blastRadius = 3.0;
-    
-    const playerDist = Math.hypot(player.x - gx, player.y - gy);
-    if (playerDist <= blastRadius) {
-        const damagePercentage = 1.0 - (playerDist / blastRadius);
-        const playerDamage = Math.floor(damagePercentage * 60); 
-        if (playerDamage > 5) registerPlayerDamage(playerDamage);
-    }
-
-    enemies.forEach(en => {
-        if (en.isDying) return;
-        const enemyDist = Math.hypot(en.x - gx, en.y - gy);
-        if (enemyDist <= blastRadius) {
-            const damagePercentage = 1.0 - (enemyDist / blastRadius);
-            const explosiveDamage = Math.floor(damagePercentage * 250); 
-            
-            if (explosiveDamage > 10) {
-                en.health -= explosiveDamage;
-                en.hitFlash = 5;
-                if (en.health <= 0) {
-                    en.isDying = true;
-                    en.deathTimer = 30;
-                    killsInWave++;
-                    updateUI();
-                    checkWaveProgress();
-                }
-            }
-        }
-    });
-}
-
-function checkWaveProgress() {
-    if (killsInWave >= getEnemiesForWave(wave)) {
-        if (wave < MAX_WAVES) {
-            showNotification("WAVE COMPLETE", "#fff");
-            wave++;
-            setTimeout(startWave, 2000);
-        } else {
-            gameState = 'win';
-            isFiringContinuous = false;
-            document.exitPointerLock();
-            overlay.style.display = 'flex';
-            topHUD.style.display = 'none';
-            bottomLeftHUD.style.display = 'none';
-            bottomMiddleHUD.style.display = 'none';
-            bottomRightHUD.style.display = 'none';
-            centerReloadHUD.style.display = 'none';
-            
-            menuOptionsContainer.style.display = 'none';
-            difficultyOptionsContainer.style.display = 'none';
-            deathNoticeSub.style.display = 'block';
-            deathNoticeSub.innerText = "CLICK TO GO BACK TO THE MAIN MENU";
-
-            overlayTitle.innerText = "MISSION SUCCESS";
-            overlayTitle.style.color = "var(--tactical-green)";
-        }
-    }
-}
-
-function generateMap() {
-    worldMap = Array.from({length: MAP_SIZE}, () => Array(MAP_SIZE).fill(0));
-    for (let y = 0; y < MAP_SIZE; y++) {
-        for (let x = 0; x < MAP_SIZE; x++) {
-            if (x === 0 || x === MAP_SIZE-1 || y === 0 || y === MAP_SIZE-1) worldMap[y][x] = 1;
-            else if (Math.random() < 0.15) worldMap[y][x] = Math.random() > 0.5 ? 1 : 2;
-        }
-    }
-    worldMap[2][2] = 0; worldMap[3][2] = 0; worldMap[2][3] = 0;
-}
-
-function update() {
-    handleMenuParticles();
-    if (gameState !== 'playing') return;
-    
-    handleRegeneration();
-    updateAuxiliaryCooldowns();
-
-    if (isFiringContinuous && !player.reloading && player.currentWeapon === 'gun' && !player.isHealing) {
-        const now = Date.now();
-        if (now - lastAutoShotTime >= AUTO_FIRE_RATE) {
-            shoot();
-            lastAutoShotTime = now;
-        }
-    }
-
-    if (player.pitch > 0) player.pitch *= 0.85; 
-    if (player.pitch < 0) player.pitch *= 0.85;
-
-    if (screenShakeTime > 0) {
-        screenShakeTime--;
-        canvas.style.transform = `translate(${(Math.random()-0.5)*15}px, ${(Math.random()-0.5)*15}px)`;
-    } else {
-        canvas.style.transform = `translate(0,0)`;
-    }
-
-    let mx = 0, my = 0;
-    if (keys['KeyW']) { mx += Math.cos(player.dir) * player.speed; my += Math.sin(player.dir) * player.speed; }
-    if (keys['KeyS']) { mx -= Math.cos(player.dir) * player.speed; my -= Math.sin(player.dir) * player.speed; }
-    if (keys['KeyA']) { mx += Math.cos(player.dir - 1.57) * player.speed; my += Math.sin(player.dir - 1.57) * player.speed; }
-    if (keys['KeyD']) { mx += Math.cos(player.dir + 1.57) * player.speed; my += Math.sin(player.dir + 1.57) * player.speed; }
-
-    if (worldMap[Math.floor(player.y)][Math.floor(player.x + mx)] === 0) player.x += mx;
-    if (worldMap[Math.floor(player.y + my)][Math.floor(player.x)] === 0) player.y += my;
-
-    for (let i = grenades.length - 1; i >= 0; i--) {
-        let g = grenades[i];
-        let nex = g.x + g.vx;
-        let ney = g.y + g.vy;
-        
-        if (worldMap[Math.floor(g.y)][Math.floor(nex)] > 0) { g.vx *= -0.6; nex = g.x; }
-        if (worldMap[Math.floor(ney)][Math.floor(g.x)] > 0) { g.vy *= -0.6; ney = g.y; }
-        
-        g.x = nex; g.y = ney;
-        g.vx *= 0.95; g.vy *= 0.95; 
-        
-        g.life--;
-        if (g.life <= 0) {
-            processExplosion(g.x, g.y);
-            grenades.splice(i, 1);
-        }
-    }
-
-    for (let i = projectiles.length - 1; i >= 0; i--) {
-        let p = projectiles[i];
-        p.x += p.vx; p.y += p.vy;
-        if (worldMap[Math.floor(p.y)][Math.floor(p.x)] > 0) { projectiles.splice(i, 1); continue; }
-        if (Math.hypot(p.x - player.x, p.y - player.y) < 0.3) {
-            projectiles.splice(i, 1);
-            registerPlayerDamage(10);
-            continue;
-        }
-        p.life--;
-        if (p.life <= 0) projectiles.splice(i, 1);
-    }
-
-    for (let i = enemies.length - 1; i >= 0; i--) {
-        let en = enemies[i];
-        
-        if (en.isDying) {
-            en.deathTimer--;
-            if (en.deathTimer <= 0) {
-                enemies.splice(i, 1);
-                if (wave < 4) while(enemies.filter(e => !e.isDying).length < 6 && enemiesSpawnedInWave < getEnemiesForWave(wave)) spawnEnemy();
-            }
-            continue;
-        }
-
-        let dist = Math.hypot(player.x - en.x, player.y - en.y);
-        if (en.hitFlash > 0) en.hitFlash--;
-        if (en.swingTime > 0) en.swingTime--;
-
-        let ang = Math.atan2(player.y - en.y, player.x - en.x);
-        let speed = en.isBoss ? 0.015 : (en.isMelee ? 0.025 : 0.02);
-        
-        if (dist > 1.0) {
-            let nex = en.x + Math.cos(ang) * speed;
-            let ney = en.y + Math.sin(ang) * speed;
-            if (worldMap[Math.floor(en.y)][Math.floor(nex)] === 0) en.x = nex;
-            if (worldMap[Math.floor(ney)][Math.floor(en.x)] === 0) en.y = ney;
-        }
-
-        if (en.isMelee) {
-            if (dist <= 1.2 && Date.now() - en.lastShot > 1500) {
-                en.swingTime = 20; 
-                en.lastShot = Date.now();
-                screenShakeTime = 10;
-                registerPlayerDamage(15);
-            }
-        } else {
-            // Apply unique attack rhythm modifiers relative to active risk level
-            const activeMod = difficultyModifiers[selectedDifficulty];
-            let fireRate = en.isBoss ? 800 : ((3000 - (wave * 200)) * activeMod.fireRateMultiplier);
-            
-            if (Date.now() - en.lastShot > fireRate) {
-                en.isFiring = true;
-                en.lastShot = Date.now();
-                projectiles.push({
-                    x: en.x, y: en.y,
-                    vx: Math.cos(ang) * 0.15, vy: Math.sin(ang) * 0.15,
-                    life: 150
-                });
-                setTimeout(() => en.isFiring = false, 150);
-            }
-        }
-    }
-}
-
-function drawMinimap() {
-    mctx.fillStyle = "rgba(5, 5, 5, 0.85)";
-    mctx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
-
-    const cellSize = minimapCanvas.width / MAP_SIZE;
-
-    for (let y = 0; y < MAP_SIZE; y++) {
-        for (let x = 0; x < MAP_SIZE; x++) {
-            if (worldMap[y][x] === 1) {
-                mctx.fillStyle = "#3a1515"; 
-                mctx.fillRect(x * cellSize, y * cellSize, cellSize - 0.5, cellSize - 0.5);
-            } else if (worldMap[y][x] === 2) {
-                mctx.fillStyle = "#1e1e1e"; 
-                mctx.fillRect(x * cellSize, y * cellSize, cellSize - 0.5, cellSize - 0.5);
-            }
-        }
-    }
-
-    grenades.forEach(g => {
-        mctx.fillStyle = "#ffaa00";
-        mctx.fillRect(g.x * cellSize - 2, g.y * cellSize - 2, 4, 4);
-    });
-
-    enemies.forEach(en => {
-        if (en.isDying) return; 
-        mctx.fillStyle = en.isBoss ? "#ff3131" : "#ff5c5c";
-        mctx.beginPath();
-        let r = en.isBoss ? 4 : 2.5;
-        mctx.arc(en.x * cellSize, en.y * cellSize, r, 0, Math.PI * 2);
-        mctx.fill();
-    });
-
-    const px = player.x * cellSize;
-    const py = player.y * cellSize;
-
-    mctx.strokeStyle = "rgba(0, 255, 65, 0.4)";
-    mctx.lineWidth = 1.5;
-    mctx.beginPath();
-    mctx.moveTo(px, py);
-    mctx.lineTo(px + Math.cos(player.dir) * 15, py + Math.sin(player.dir) * 15);
-    mctx.stroke();
-
-    mctx.fillStyle = "var(--tactical-green)";
-    mctx.beginPath();
-    mctx.arc(px, py, 3.5, 0, Math.PI * 2);
-    mctx.fill();
-}
-
-function draw() {
-    if (gameState === 'menu') return;
-    const horizon = (canvas.height / 2) + player.pitch;
-    ctx.fillStyle = "#0a0a0d"; ctx.fillRect(0, 0, canvas.width, canvas.height); 
-    ctx.fillStyle = "#120808"; ctx.fillRect(0, 0, canvas.width, horizon); 
-
-    const fov = 1.1;
-    for (let i = 0; i < canvas.width; i++) {
-        let rayA = (player.dir - fov/2) + (i / canvas.width) * fov;
-        let dist = 0, hit = 0;
-        let cA = Math.cos(rayA), sA = Math.sin(rayA);
-        while (hit === 0 && dist < 16) {
-            dist += 0.05;
-            let tx = Math.floor(player.x + cA * dist);
-            let ty = Math.floor(player.y + sA * dist);
-            if (worldMap[ty] && worldMap[ty][tx] > 0) hit = worldMap[ty][tx];
-        }
-        zBuffer[i] = dist * Math.cos(rayA - player.dir);
-        let h = canvas.height / zBuffer[i];
-        
-        if (hit === 1) {
-            let rValue = Math.max(10, 140 - (dist * 10));
-            ctx.strokeStyle = `rgb(${rValue}, 12, 12)`;
-        } else {
-            let greyValue = Math.max(8, 70 - (dist * 5));
-            ctx.strokeStyle = `rgb(${greyValue}, ${greyValue}, ${greyValue})`;
-        }
-        
-        ctx.beginPath(); ctx.moveTo(i, horizon - h/2); ctx.lineTo(i, horizon + h/2); ctx.stroke();
-    }
-
-    let sprites = [
-        ...enemies.map(e => ({...e, type: 'enemy'})), 
-        ...projectiles.map(p => ({...p, type: 'projectile'})),
-        ...grenades.map(g => ({...g, type: 'grenade', scale: 0.3}))
-    ];
-    sprites.sort((a,b) => Math.hypot(b.x-player.x, b.y-player.y) - Math.hypot(a.x-player.x, a.y-player.y));
-
-    sprites.forEach(s => {
-        let dx = s.x - player.x, dy = s.y - player.y;
-        let dist = Math.hypot(dx, dy);
-        let spriteAngle = Math.atan2(dy, dx) - player.dir;
-        while(spriteAngle < -Math.PI) spriteAngle += Math.PI * 2;
-        while(spriteAngle > Math.PI) spriteAngle -= Math.PI * 2;
-
-        if (Math.abs(spriteAngle) < fov) {
-            let spriteSize = (canvas.height / (dist * Math.cos(spriteAngle))) * (s.scale || 1);
-            let xPos = (0.5 * (spriteAngle / (fov / 2)) + 0.5) * canvas.width;
-            
-            if (s.type === 'enemy') {
-                const idx = enemies.findIndex(e => e.x === s.x && e.y === s.y);
-                if (idx !== -1) {
-                    enemies[idx].renderX = xPos;
-                    enemies[idx].renderSize = spriteSize;
-                }
-            }
-
-            if (dist < zBuffer[Math.floor(xPos)] + 0.5) {
-                if (s.type === 'enemy') {
-                    let hSlices = canvas.height / (dist * Math.cos(spriteAngle));
-                    let footLine = horizon + hSlices / 2;
-                    let baseLine = footLine; 
-
-                    let collapseOffset = 0;
-                    let scatter = 0;
-                    if (s.isDying) {
-                        let progress = (30 - s.deathTimer) / 30; 
-                        collapseOffset = progress * (spriteSize * 0.4); 
-                        scatter = progress * (spriteSize * 0.4);        
-                    }
-
-                    if (s.isBoss && !s.isDying) {
-                        ctx.fillStyle = `rgba(230, ${60 + Math.random()*100}, 0, 0.5)`;
-                        for(let f=0; f<12; f++) {
-                            ctx.fillRect(xPos - spriteSize/2.2 + Math.random()*spriteSize/1.1, baseLine - spriteSize * 1.2 - Math.random()*40, spriteSize/12, spriteSize/4);
-                        }
-                    }
-
-                    let boneColor = s.hitFlash > 0 ? "#fff" : (s.isBoss ? "#556255" : "#e0e0d5");
-                    ctx.fillStyle = boneColor;
-
-                    ctx.fillRect(xPos - spriteSize/10 + (scatter * 0.2), baseLine - spriteSize * 0.95 + collapseOffset - (scatter * 0.1), spriteSize/5, spriteSize/6);
-                    ctx.fillRect(xPos - spriteSize/14 + (scatter * 0.2), baseLine - spriteSize * 0.79 + collapseOffset - (scatter * 0.1), spriteSize/7, spriteSize/12);
-
-                    ctx.fillStyle = "#000";
-                    ctx.fillRect(xPos - spriteSize/18 + (scatter * 0.2), baseLine - spriteSize * 0.88 + collapseOffset - (scatter * 0.1), spriteSize/35, spriteSize/35); 
-                    ctx.fillRect(xPos + spriteSize/35 + (scatter * 0.2), baseLine - spriteSize * 0.88 + collapseOffset - (scatter * 0.1), spriteSize/35, spriteSize/35); 
-                    ctx.fillRect(xPos - spriteSize/120 + (scatter * 0.2), baseLine - spriteSize * 0.83 + collapseOffset - (scatter * 0.1), spriteSize/60, spriteSize/40); 
-
-                    ctx.fillStyle = boneColor;
-                    ctx.fillRect(xPos - spriteSize/35, baseLine - spriteSize * 0.7 + collapseOffset, spriteSize/17.5, spriteSize/2);
-                    
-                    ctx.fillRect(xPos - spriteSize/5 - scatter, baseLine - spriteSize * 0.7 + collapseOffset, spriteSize/2.5, spriteSize/35); 
-                    ctx.fillRect(xPos - spriteSize/4.4 + scatter, baseLine - spriteSize * 0.61 + collapseOffset, spriteSize/2.25, spriteSize/35); 
-                    ctx.fillRect(xPos - spriteSize/5 - (scatter * 0.5), baseLine - spriteSize * 0.55 + collapseOffset, spriteSize/2.5, spriteSize/35); 
-                    ctx.fillRect(xPos - spriteSize/6 + (scatter * 0.5), baseLine - spriteSize * 0.49 + collapseOffset, spriteSize/3, spriteSize/35); 
-
-                    let legSwing = s.isDying ? 0 : Math.sin(Date.now() * 0.01) * (spriteSize / 6);
-                    ctx.fillRect(xPos - spriteSize/7 - scatter, baseLine - spriteSize * 0.23 + (collapseOffset * 0.5), spriteSize/45, spriteSize/4 + legSwing);
-                    ctx.fillRect(xPos + spriteSize/9 + scatter, baseLine - spriteSize * 0.23 + (collapseOffset * 0.5), spriteSize/45, spriteSize/4 - legSwing);
-
-                    if (s.isMelee) {
-                        ctx.save();
-                        ctx.translate(xPos - spriteSize/6 - (scatter * 0.8), baseLine - spriteSize * 0.5 + collapseOffset);
-                        
-                        let swingArc = 0;
-                        if (s.isDying) {
-                            swingArc = ((30 - s.deathTimer) / 30) * 2.5; 
-                        } else if (s.swingTime > 0) {
-                            swingArc = Math.sin((s.swingTime / 20) * Math.PI) * -1.5;
-                        }
-                        ctx.rotate(swingArc);
-
-                        ctx.fillStyle = "#8a9597"; 
-                        ctx.fillRect(-spriteSize/45, -spriteSize/2.2, spriteSize/30, spriteSize/2.2);
-                        ctx.fillStyle = "#b5a642"; 
-                        ctx.fillRect(-spriteSize/15, -spriteSize/35, spriteSize/6, spriteSize/45);
-                        ctx.fillStyle = "#5c4033"; 
-                        ctx.fillRect(-spriteSize/70, 0, spriteSize/50, spriteSize/10);
-                        ctx.restore();
-
-                        ctx.fillStyle = boneColor;
-                        ctx.fillRect(xPos - spriteSize/5 - scatter, baseLine - spriteSize * 0.57 + collapseOffset, spriteSize/45, spriteSize/6);
-                    } else {
-                        ctx.save();
-                        ctx.translate(xPos - spriteSize/6, baseLine - spriteSize * 0.55 + collapseOffset);
-                        if (s.isDying) ctx.rotate(((30 - s.deathTimer) / 30) * -1.8);
-
-                        ctx.fillStyle = "#1c1c1f"; 
-                        ctx.fillRect(0, 0, spriteSize/4, spriteSize/15); 
-                        ctx.fillStyle = "#0d0d0e"; 
-                        ctx.fillRect(-spriteSize/4.3, 0, spriteSize/4, spriteSize/35);
-                        ctx.fillStyle = "#111112"; 
-                        ctx.fillRect(0, spriteSize/25, spriteSize/25, spriteSize/12);
-                        if (!s.isDying) {
-                            ctx.fillStyle = "rgba(0, 255, 65, 0.7)"; 
-                            ctx.fillRect(spriteSize/15, -spriteSize/25, spriteSize/40, spriteSize/50);
-                        }
-                        ctx.restore();
-
-                        ctx.fillStyle = boneColor;
-                        ctx.fillRect(xPos - spriteSize/5 - scatter, baseLine - spriteSize * 0.57 + collapseOffset, spriteSize/45, spriteSize/6);
-                        ctx.fillRect(xPos + spriteSize/15 + scatter, baseLine - spriteSize * 0.49 + collapseOffset, spriteSize/45, spriteSize/6);
-                    }
-
-                    if (!s.isDying) {
-                        ctx.fillStyle = "#333"; ctx.fillRect(xPos - 40, baseLine - spriteSize * 1.15, 80, 6);
-                        ctx.fillStyle = s.isBoss ? "#ff4500" : "#00ff41"; 
-                        ctx.fillRect(xPos - 40, baseLine - spriteSize * 1.15, 80 * (s.health / s.maxHealth), 6);
-                    }
-                } else if (s.type === 'grenade') {
-                    ctx.fillStyle = "#3a5f3a";
-                    ctx.beginPath();
-                    ctx.arc(xPos, horizon + (spriteSize * 0.8), spriteSize, 0, Math.PI * 2);
-                    ctx.fill();
-                    
-                    ctx.fillStyle = (Math.floor(Date.now() / 100) % 2 === 0) ? "#ff3131" : "#000";
-                    ctx.beginPath();
-                    ctx.arc(xPos, horizon + (spriteSize * 0.8), spriteSize * 0.3, 0, Math.PI * 2);
-                    ctx.fill();
-                } else {
-                    ctx.fillStyle = "#ff0";
-                    ctx.beginPath(); ctx.arc(xPos, horizon, spriteSize/10, 0, Math.PI * 2); ctx.fill();
-                }
-            }
-        } else {
-            if (s.type === 'enemy') {
-                const idx = enemies.findIndex(e => e.x === s.x && e.y === s.y);
-                if (idx !== -1) enemies[idx].renderSize = 0;
-            }
-        }
-    });
-
-    drawMinimap();
-}
-
-// Route main game button to show sub menu selection instead
-btnUprising.addEventListener('click', (e) => {
-    e.stopPropagation(); 
-    if (gameState === 'menu') {
-        selectDifficultyMode();
-    }
-});
-
-// Setup difficulty click triggers to start matches
-document.getElementById('btn-diff-normal').addEventListener('click', (e) => { e.stopPropagation(); startNewGame('Normal'); });
-document.getElementById('btn-diff-medium').addEventListener('click', (e) => { e.stopPropagation(); startNewGame('Medium'); });
-document.getElementById('btn-diff-hard').addEventListener('click', (e) => { e.stopPropagation(); startNewGame('Hard'); });
-document.getElementById('btn-diff-impossible').addEventListener('click', (e) => { e.stopPropagation(); startNewGame('Impossible'); });
-
-document.addEventListener('mousedown', (e) => {
-    if (gameState === 'over' || gameState === 'win') {
-        returnToMainMenu();
-    } else if (gameState === 'playing') {
-        if (document.pointerLockElement === canvas) {
-            if (player.currentWeapon === 'gun') {
-                player.isHealing ? isFiringContinuous = false : isFiringContinuous = true; 
-            } else {
-                shoot(); 
-            }
-        } else {
-            canvas.requestPointerLock();
-        }
-    }
-});
-
-document.addEventListener('mouseup', (e) => {
-    if (gameState === 'playing') {
-        isFiringContinuous = false; 
-    }
-});
-
-document.addEventListener('mousemove', (e) => {
+// Global window layout listeners
+window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+window.addEventListener('mousemove', e => {
     if (document.pointerLockElement === canvas && gameState === 'playing') {
         player.dir += e.movementX * 0.0025;
-        player.pitch = Math.max(-200, Math.min(200, player.pitch - e.movementY * 0.8));
-        
-        if (!player.reloading && !player.isMeleeSwinging && !player.isHealing) {
-            weaponWrap.style.transform = `translateX(-50%) translateY(${player.pitch * -0.15}px)`;
-        }
+        player.pitch = Math.max(-180, Math.min(180, player.pitch - e.movementY * 1.5));
     }
 });
 
-window.addEventListener('keydown', e => { 
-    keys[e.code] = true; 
-    if (gameState === 'playing') {
-        if (e.code === 'KeyR') reload(); 
-        if (e.code === 'KeyE') throwGrenade(); 
-        if (e.code === 'Digit1') switchWeapon();
-        if (e.code === 'Digit2') useMedkit();
-    }
-});
-window.addEventListener('keyup', e => keys[e.code] = false);
+btnUprising.addEventListener('click', selectDifficultyMode);
+document.getElementById('btn-diff-normal').addEventListener('click', () => startNewGame('Normal'));
+document.getElementById('btn-diff-medium').addEventListener('click', () => startNewGame('Medium'));
+document.getElementById('btn-diff-hard').addEventListener('click', () => startNewGame('Hard'));
+document.getElementById('btn-diff-impossible').addEventListener('click', () => startNewGame('Impossible'));
+deathNoticeSub.addEventListener('click', returnToMainMenu);
 
-function loop() { update(); draw(); requestAnimationFrame(loop); }
-loop();
+// Start operational execution
+gameLoop();
 </script>
 </body>
 </html>
