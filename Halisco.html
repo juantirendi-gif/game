@@ -13,6 +13,8 @@
             --regen-blue: #31d7ff;
             --bone-white: #e0e0e0;
             --bloody-red: #990000;
+            --glove-base: #1c1c1f;
+            --glove-plate: #2d2e33;
         }
 
         body {
@@ -56,6 +58,28 @@
         #damage-vignette.blood-pulse {
             box-shadow: inset 0 0 100px rgba(180, 0, 0, 0.95);
             transition: none;
+        }
+
+        /* Healing border screen flash overlay */
+        #heal-flash-vignette {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 41;
+            opacity: 0;
+            box-shadow: inset 0 0 80px rgba(0, 255, 65, 0.85);
+        }
+
+        @keyframes healPulse {
+            0% { opacity: 0; box-shadow: inset 0 0 40px rgba(0, 255, 65, 0.4); }
+            25% { opacity: 1; box-shadow: inset 0 0 100px rgba(0, 255, 65, 0.95); }
+            50% { opacity: 0.3; box-shadow: inset 0 0 50px rgba(0, 255, 65, 0.5); }
+            75% { opacity: 0.9; box-shadow: inset 0 0 90px rgba(0, 255, 65, 0.85); }
+            100% { opacity: 0; box-shadow: inset 0 0 0px rgba(0, 255, 65, 0); }
+        }
+
+        .healing-flash-active {
+            animation: healPulse 2.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
         }
 
         canvas#gameCanvas {
@@ -203,19 +227,21 @@
             left: 50%;
             transform: translateX(-50%);
             display: none;
-            align-items: center;
-            gap: 15px;
             z-index: 10;
             pointer-events: none;
-            background: rgba(5, 5, 5, 0.85);
-            border: 2px solid #333;
-            padding: 10px 20px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.8);
+            display: flex;
+            gap: 15px;
         }
 
-        #swap-preview-circle {
+        .hud-circle-wrapper {
+            position: relative;
             width: 65px;
             height: 65px;
+        }
+
+        .hud-circle-container {
+            width: 100%;
+            height: 100%;
             border: 2px solid var(--tactical-green);
             border-radius: 50%;
             background: rgba(15, 15, 15, 0.9);
@@ -223,20 +249,51 @@
             align-items: center;
             justify-content: center;
             box-shadow: 0 0 12px rgba(0, 255, 65, 0.25);
+            overflow: hidden;
         }
 
-        #swap-preview-circle svg {
+        .hud-circle-container svg {
             width: 95%;
             height: 95%;
         }
 
-        #swap-text-prompt {
-            font-size: 0.78rem;
+        .hud-hotkey-badge {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            background: #050505;
+            border: 1.5px solid var(--tactical-green);
+            color: var(--tactical-green);
+            font-size: 0.75rem;
             font-weight: bold;
-            letter-spacing: 2px;
-            color: #777;
-            text-transform: uppercase;
-            white-space: nowrap;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 6px rgba(0, 255, 65, 0.4);
+            z-index: 12;
+        }
+
+        .cooldown-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--damage-orange);
+            font-weight: bold;
+            font-size: 1rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 11;
+        }
+
+        .cooldown-overlay.active {
+            opacity: 1;
         }
 
         .status-ready {
@@ -274,6 +331,60 @@
             display: none;
         }
 
+        #grenade-arm-wrapper {
+            position: absolute;
+            bottom: -380px; 
+            left: -50px;
+            width: 400px;
+            height: 400px;
+            pointer-events: none;
+            z-index: 6;
+            transform: rotate(25deg);
+            transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), bottom 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+            display: none;
+        }
+
+        #grenade-arm-wrapper.throwing {
+            bottom: -60px;
+            left: 60px;
+            transform: rotate(-15deg) scale(1.1);
+        }
+
+        /* New structural anchor container for the First-Person Medkit Animation */
+        #medkit-use-wrapper {
+            position: absolute;
+            bottom: -350px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 320px;
+            height: 320px;
+            pointer-events: none;
+            z-index: 7;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1), bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+            display: none;
+        }
+
+        #medkit-use-wrapper.using {
+            bottom: -20px;
+            transform: translateX(-50%) scale(1.05);
+        }
+
+        #medkit-use-wrapper.healing-shake {
+            animation: medkitWobble 0.8s ease-in-out infinite alternate;
+        }
+
+        @keyframes medkitWobble {
+            0% { transform: translateX(-50%) translateY(0) rotate(0deg); }
+            50% { transform: translateX(-48%) translateY(-5px) rotate(2deg); }
+            100% { transform: translateX(-52%) translateY(3px) rotate(-2deg); }
+        }
+
+        .machete-blade {
+            fill: #8a9597;
+            stroke: #cbd5e1;
+            stroke-width: 0.5;
+        }
+
         #muzzle-flash {
             position: absolute;
             top: 6%; 
@@ -284,12 +395,6 @@
             display: none;
             z-index: 4;
             pointer-events: none;
-        }
-
-        .machete-blade {
-            fill: #8a9597;
-            stroke: #cbd5e1;
-            stroke-width: 0.5;
         }
 
         #crosshair {
@@ -401,6 +506,7 @@
 
     <div id="game-container">
         <div id="damage-vignette"></div>
+        <div id="heal-flash-vignette"></div>
 
         <div id="notification">WAVE 1 ARRIVING</div>
         <div id="overlay">
@@ -436,8 +542,15 @@
         </div>
 
         <div id="bottom-middle-hud">
-            <div id="swap-preview-circle"></div>
-            <div id="swap-text-prompt">click 1 to swap weapons</div>
+            <div class="hud-circle-wrapper">
+                <div id="swap-preview-circle" class="hud-circle-container"></div>
+                <div class="hud-hotkey-badge">1</div>
+            </div>
+            <div class="hud-circle-wrapper">
+                <div id="medkit-circle" class="hud-circle-container"></div>
+                <div id="medkit-cooldown-text" class="cooldown-overlay">20s</div>
+                <div class="hud-hotkey-badge">2</div>
+            </div>
         </div>
 
         <div id="bottom-right-hud">
@@ -453,6 +566,14 @@
             <div id="muzzle-flash"></div>
             <svg id="weapon-svg" viewBox="0 0 200 200"></svg>
         </div>
+
+        <div id="grenade-arm-wrapper">
+            <svg id="grenade-arm-svg" viewBox="0 0 200 200" style="width:100%; height:100%;"></svg>
+        </div>
+
+        <div id="medkit-use-wrapper">
+            <svg id="medkit-use-svg" viewBox="0 0 200 200" style="width:100%; height:100%;"></svg>
+        </div>
     </div>
 
 <script>
@@ -465,6 +586,10 @@ const pctx = pCanvas.getContext('2d');
 const gameContainer = document.getElementById('game-container');
 const weaponWrap = document.getElementById('weapon-wrapper');
 const weaponSvg = document.getElementById('weapon-svg');
+const grenadeArmWrap = document.getElementById('grenade-arm-wrapper');
+const grenadeArmSvg = document.getElementById('grenade-arm-svg');
+const medkitUseWrap = document.getElementById('medkit-use-wrapper');
+const medkitUseSvg = document.getElementById('medkit-use-svg');
 const muzzle = document.getElementById('muzzle-flash');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
@@ -477,9 +602,12 @@ const topHUD = document.getElementById('top-right-hud');
 const bottomLeftHUD = document.getElementById('bottom-left-hud');
 const bottomMiddleHUD = document.getElementById('bottom-middle-hud');
 const swapPreviewCircle = document.getElementById('swap-preview-circle');
+const medkitCircle = document.getElementById('medkit-circle');
+const medkitCooldownText = document.getElementById('medkit-cooldown-text');
 const bottomRightHUD = document.getElementById('bottom-right-hud');
 const centerReloadHUD = document.getElementById('center-reload-hud');
 const damageVignette = document.getElementById('damage-vignette');
+const healFlashVignette = document.getElementById('heal-flash-vignette');
 const cooldownStatus = document.getElementById('cooldown-status');
 
 let gameState = 'menu'; 
@@ -503,6 +631,25 @@ let isFiringContinuous = false;
 let lastAutoShotTime = 0;
 const AUTO_FIRE_RATE = 100; 
 
+const SVG_GLOVE_FRAGMENTS = `
+    <path d="M 82 125 L 72 200 L 132 200 L 114 125 Z" fill="var(--glove-base)" stroke="#111" stroke-width="1"/>
+    <polygon points="84,140 94,195 106,195 110,140" fill="var(--glove-plate)"/>
+    <circle cx="97" cy="155" r="4" fill="var(--tactical-green)" fill-opacity="0.4"/>
+    <rect x="86" y="112" width="10" height="15" fill="var(--glove-base)" rx="2"/>
+    <rect x="96" y="110" width="10" height="17" fill="var(--glove-base)" rx="2"/>
+    <rect x="106" y="114" width="9" height="15" fill="var(--glove-base)" rx="2"/>
+`;
+
+// Left glove design mirrored/shifted specifically for holding utility items
+const SVG_LEFT_GLOVE_FRAGMENTS = `
+    <path d="M 118 125 L 128 200 L 68 200 L 86 125 Z" fill="var(--glove-base)" stroke="#111" stroke-width="1"/>
+    <polygon points="116,140 106,195 94,195 90,140" fill="var(--glove-plate)"/>
+    <circle cx="103" cy="155" r="4" fill="var(--tactical-green)" fill-opacity="0.4"/>
+    <rect x="104" y="112" width="10" height="15" fill="var(--glove-base)" rx="2"/>
+    <rect x="94" y="110" width="10" height="17" fill="var(--glove-base)" rx="2"/>
+    <rect x="85" y="114" width="9" height="15" fill="var(--glove-base)" rx="2"/>
+`;
+
 const GUN_SVG_MARKUP = `
     <rect x="76" y="85" width="48" height="25" fill="#141416" stroke="#222" stroke-width="0.5" />
     <rect x="78" y="78" width="44" height="8" fill="#1c1c1f" />
@@ -522,18 +669,48 @@ const GUN_SVG_MARKUP = `
     <line x1="94" y1="115" x2="94" y2="140" stroke="#222" stroke-width="1" />
     <line x1="100" y1="115" x2="100" y2="140" stroke="#222" stroke-width="1" />
     <path d="M 76 90 L 62 135 L 86 135 Z" fill="#09090a" />
-    <rect x="76" y="110" width="48" height="90" fill="#09090a" />
+    ${SVG_GLOVE_FRAGMENTS}
 `;
 
 const MACHETE_SVG_MARKUP = `
+    <path d="M 95 125 L 91 25 L 105 15 L 109 45 L 105 125 Z" class="machete-blade" />
+    <line x1="97" y1="115" x2="95" y2="35" stroke="#475569" stroke-width="1.5" />
     <rect x="92" y="125" width="16" height="6" fill="#111" stroke="#333" stroke-width="0.5" />
     <rect x="94" y="131" width="12" height="55" fill="#2d2219" rx="2" />
     <line x1="94" y1="142" x2="106" y2="142" stroke="#1a120c" stroke-width="2" />
     <line x1="94" y1="154" x2="106" y2="154" stroke="#1a120c" stroke-width="2" />
     <line x1="94" y1="166" x2="106" y2="166" stroke="#1a120c" stroke-width="2" />
     <line x1="94" y1="178" x2="106" y2="178" stroke="#1a120c" stroke-width="2" />
-    <path d="M 95 125 L 91 25 L 105 15 L 109 45 L 105 125 Z" class="machete-blade" />
-    <line x1="97" y1="115" x2="95" y2="35" stroke="#475569" stroke-width="1.5" />
+    ${SVG_GLOVE_FRAGMENTS}
+`;
+
+const MEDKIT_SVG_MARKUP = `
+    <rect x="65" y="65" width="70" height="70" fill="#1c1c1f" stroke="#333" stroke-width="1" rx="8" />
+    <rect x="75" y="75" width="50" height="50" fill="#111" rx="4" />
+    <rect x="94" y="83" width="12" height="34" fill="var(--tactical-green)" rx="1" />
+    <rect x="83" y="94" width="34" height="12" fill="var(--tactical-green)" rx="1" />
+`;
+
+// FP Medkit uses two tactical gloves displaying the active healing inventory
+const FP_MEDKIT_USE_MARKUP = `
+    <g transform="translate(0, 20)">
+        <rect x="55" y="45" width="90" height="90" fill="#1c1c1f" stroke="#333" stroke-width="1.5" rx="10" />
+        <rect x="67" y="57" width="66" height="66" fill="#0c0c0e" rx="6" />
+        <rect x="92" y="67" width="16" height="46" fill="var(--tactical-green)" rx="2" />
+        <rect x="77" y="82" width="46" height="16" fill="var(--tactical-green)" rx="2" />
+        <circle cx="120" cy="67" r="4" fill="#00ff41" fill-opacity="0.6" />
+    </g>
+    <g transform="translate(-25, 10)">${SVG_GLOVE_FRAGMENTS}</g>
+    <g transform="translate(25, 10)">${SVG_LEFT_GLOVE_FRAGMENTS}</g>
+`;
+
+const GRENADE_ARM_MARKUP = `
+    <path d="M 0 200 L 60 90 L 110 115 L 40 200 Z" fill="var(--glove-base)" stroke="#111" stroke-width="1"/>
+    <circle cx="85" cy="100" r="14" fill="#3a5f3a" stroke="#222" stroke-width="1"/>
+    <rect x="80" y="82" width="10" height="5" fill="#222" transform="rotate(15 85 100)"/>
+    <circle cx="85" cy="100" r="3" fill="#ff3131"/>
+    <path d="M 68 112 L 62 100 L 76 88 L 84 94 Z" fill="var(--glove-base)"/>
+    <rect x="64" y="96" width="6" height="12" fill="var(--glove-base)" rx="1" transform="rotate(-10 67 102)"/>
 `;
 
 const player = {
@@ -543,8 +720,11 @@ const player = {
     lastRegenTick: 0,
     lastGrenadeTime: 0,
     grenadeCooldown: 10000,
+    lastMedkitTime: 0,
+    medkitCooldown: 20000,
     currentWeapon: 'gun',
-    isMeleeSwinging: false
+    isMeleeSwinging: false,
+    isHealing: false
 };
 
 const keys = {};
@@ -577,7 +757,6 @@ function createMenuParticle(initializeFullHeight = false) {
 
 function initMenuParticles() {
     menuAshArray = [];
-    // Increased particle count from 180 to 450 for significantly more atmospheric density
     for(let i = 0; i < 450; i++) {
         menuAshArray.push(createMenuParticle(true));
     }
@@ -665,8 +844,10 @@ function startNewGame() {
     player.pitch = 0;
     player.lastDamageTime = Date.now();
     player.lastGrenadeTime = 0;
+    player.lastMedkitTime = 0;
     player.currentWeapon = 'gun';
     player.isMeleeSwinging = false;
+    player.isHealing = false;
     enemies = [];
     projectiles = [];
     grenades = [];
@@ -676,6 +857,8 @@ function startNewGame() {
     overlay.style.display = 'none';
     pCanvas.style.display = 'none';
     weaponWrap.style.display = 'block';
+    grenadeArmWrap.style.display = 'block';
+    medkitUseWrap.style.display = 'block';
     crosshair.style.display = 'block';
     topHUD.style.display = 'flex';
     bottomLeftHUD.style.display = 'flex';
@@ -684,6 +867,9 @@ function startNewGame() {
     centerReloadHUD.style.display = 'none';
     
     renderEquippedWeapon();
+    medkitCircle.innerHTML = `<svg viewBox="0 0 200 200">${MEDKIT_SVG_MARKUP}</svg>`;
+    medkitUseSvg.innerHTML = FP_MEDKIT_USE_MARKUP;
+    grenadeArmSvg.innerHTML = GRENADE_ARM_MARKUP;
     canvas.requestPointerLock();
     updateUI();
 }
@@ -727,7 +913,9 @@ function spawnEnemy(isBoss = false) {
         swingTime: 0,
         isDying: false,       
         deathTimer: 0,        
-        scale: isBoss ? 2.0 : 1.0 
+        scale: isBoss ? 2.0 : 1.0,
+        renderX: 0,
+        renderSize: 0
     });
     enemiesSpawnedInWave++;
 }
@@ -745,7 +933,7 @@ function renderEquippedWeapon() {
 }
 
 function switchWeapon() {
-    if (player.reloading || player.isMeleeSwinging) return;
+    if (player.reloading || player.isMeleeSwinging || player.isHealing) return;
     
     player.currentWeapon = (player.currentWeapon === 'gun') ? 'machete' : 'gun';
     isFiringContinuous = false;
@@ -759,6 +947,55 @@ function switchWeapon() {
         updateUI();
         weaponWrap.style.transition = "transform 0.15s ease-out";
         weaponWrap.style.transform = `translateX(-50%) translateY(${pitchOffset}px)`;
+    }, 150);
+}
+
+function useMedkit() {
+    const now = Date.now();
+    if (now - player.lastMedkitTime < player.medkitCooldown || player.isHealing || player.reloading) return;
+    if (player.health >= 100) {
+        showNotification("ARMOR AT MAX CAPACITY", "var(--tactical-green)");
+        return;
+    }
+
+    player.isHealing = true;
+    isFiringContinuous = false;
+    player.lastMedkitTime = now;
+
+    // Bring weapons down out of view
+    const pitchOffset = player.pitch * -0.15;
+    weaponWrap.style.transition = "transform 0.25s ease-in";
+    weaponWrap.style.transform = `translateX(-50%) translateY(${300 + pitchOffset}px)`;
+
+    // Play visual first person medkit interaction animation sequences
+    setTimeout(() => {
+        medkitUseWrap.classList.add('using');
+        
+        setTimeout(() => {
+            medkitUseWrap.classList.add('healing-shake');
+            triggerVoice("Armor integrity structural integrity restored");
+            showNotification("ARMOR RECONSTRUCTED", "var(--tactical-green)");
+            
+            // Trigger slow screen flash green vignette animation sequence
+            healFlashVignette.classList.remove('healing-flash-active');
+            void healFlashVignette.offsetWidth; 
+            healFlashVignette.classList.add('healing-flash-active');
+
+            player.health = 100;
+            updateUI();
+
+            setTimeout(() => {
+                medkitUseWrap.classList.remove('healing-shake');
+                medkitUseWrap.classList.remove('using');
+                
+                setTimeout(() => {
+                    const endPitch = player.pitch * -0.15;
+                    weaponWrap.style.transition = "transform 0.25s ease-out";
+                    weaponWrap.style.transform = `translateX(-50%) translateY(${endPitch}px)`;
+                    player.isHealing = false;
+                }, 200);
+            }, 1000);
+        }, 400);
     }, 150);
 }
 
@@ -810,24 +1047,38 @@ function updateUI() {
     document.getElementById('hud-kills').innerText = killsInWave;
     document.getElementById('hud-remain').innerText = Math.max(0, remainingSkeletons);
     
-    updateGrenadeHUD();
+    updateAuxiliaryCooldowns();
 }
 
-function updateGrenadeHUD() {
+function updateAuxiliaryCooldowns() {
     const now = Date.now();
-    const timeElapsed = now - player.lastGrenadeTime;
     
-    if (timeElapsed < player.grenadeCooldown) {
-        const timeLeft = ((player.grenadeCooldown - timeElapsed) / 1000).toFixed(1);
-        cooldownStatus.innerText = `GRENADE: ${timeLeft}s`;
+    // Update Grenade Aux text
+    const grenadeElapsed = now - player.lastGrenadeTime;
+    if (grenadeElapsed < player.grenadeCooldown) {
+        const grenadeLeft = ((player.grenadeCooldown - grenadeElapsed) / 1000).toFixed(1);
+        cooldownStatus.innerText = `GRENADE: ${grenadeLeft}s`;
         cooldownStatus.className = "status-charging";
     } else {
         cooldownStatus.innerText = "GRENADE: READY";
         cooldownStatus.className = "status-ready";
     }
+
+    // Update Medkit HUD Circle Cooldown Overlay
+    const medkitElapsed = now - player.lastMedkitTime;
+    if (medkitElapsed < player.medkitCooldown) {
+        const medkitLeft = Math.ceil((player.medkitCooldown - medkitElapsed) / 1000);
+        medkitCooldownText.innerText = `${medkitLeft}s`;
+        medkitCooldownText.classList.add('active');
+        medkitCircle.style.borderColor = "var(--damage-orange)";
+    } else {
+        medkitCooldownText.classList.remove('active');
+        medkitCircle.style.borderColor = "var(--tactical-green)";
+    }
 }
 
 function registerPlayerDamage(amount) {
+    if (player.isHealing) return; // Add short invulnerability frames during reconstruction sequence
     player.health -= amount;
     player.lastDamageTime = Date.now();
     
@@ -884,7 +1135,7 @@ function checkGameOver() {
 }
 
 function reload() {
-    if (player.currentWeapon !== 'gun' || player.reloading || player.ammo === 30) return;
+    if (player.currentWeapon !== 'gun' || player.reloading || player.isMeleeSwinging || player.isHealing) return;
     player.reloading = true;
     isFiringContinuous = false; 
     triggerVoice("Reloading");
@@ -913,7 +1164,7 @@ function reload() {
 }
 
 function shoot() {
-    if (player.reloading || player.isMeleeSwinging) return;
+    if (player.reloading || player.isMeleeSwinging || player.isHealing) return;
 
     if (player.currentWeapon === 'machete') {
         executeMacheteSwing();
@@ -971,21 +1222,25 @@ function executeMacheteSwing() {
 function evaluateHitscanDamage(maxRange, damageAmount) {
     let closestEnemy = null;
     let closestDistance = maxRange;
+    const screenCenterX = canvas.width / 2;
+    const screenCenterY = (canvas.height / 2) + player.pitch;
 
     enemies.forEach(en => {
-        if (en.isDying) return; 
+        if (en.isDying || en.renderSize <= 0) return; 
 
         let dx = en.x - player.x, dy = en.y - player.y;
-        let angleToEn = Math.atan2(dy, dx);
-        let angleDiff = angleToEn - player.dir;
-        
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        
         let dist = Math.hypot(dx, dy);
-        let hitBoxWidth = en.isBoss ? 0.4 : 0.22; 
+        if (dist > closestDistance) return;
 
-        if (Math.abs(angleDiff) < hitBoxWidth && dist < closestDistance) {
+        const halfWidth = en.renderSize / 2;
+        const topY = screenCenterY - (en.renderSize * 0.95);
+        const bottomY = screenCenterY + (en.renderSize * 0.25);
+
+        const withinX = screenCenterX >= (en.renderX - halfWidth) && screenCenterX <= (en.renderX + halfWidth);
+        const withinY = screenCenterY >= topY && screenCenterY <= bottomY;
+
+        if (withinX && withinY) {
+            let angleToEn = Math.atan2(dy, dx);
             let clearShot = true;
             for(let d = 0.2; d < dist; d += 0.2) {
                 let checkX = Math.floor(player.x + Math.cos(angleToEn) * d);
@@ -1023,19 +1278,27 @@ function evaluateHitscanDamage(maxRange, damageAmount) {
 
 function throwGrenade() {
     const now = Date.now();
-    if (now - player.lastGrenadeTime < player.grenadeCooldown) return; 
+    if (now - player.lastGrenadeTime < player.grenadeCooldown || player.isHealing) return; 
 
     player.lastGrenadeTime = now;
     
-    const launchForce = 0.12;
-    grenades.push({
-        x: player.x,
-        y: player.y,
-        vx: Math.cos(player.dir) * launchForce,
-        vy: Math.sin(player.dir) * launchForce,
-        life: 45 
-    });
-    updateUI();
+    grenadeArmWrap.classList.add('throwing');
+    
+    setTimeout(() => {
+        const launchForce = 0.12;
+        grenades.push({
+            x: player.x,
+            y: player.y,
+            vx: Math.cos(player.dir) * launchForce,
+            vy: Math.sin(player.dir) * launchForce,
+            life: 45 
+        });
+        updateUI();
+        
+        setTimeout(() => {
+            grenadeArmWrap.classList.remove('throwing');
+        }, 150);
+    }, 200);
 }
 
 function processExplosion(gx, gy) {
@@ -1074,7 +1337,7 @@ function processExplosion(gx, gy) {
 function checkWaveProgress() {
     if (killsInWave >= getEnemiesForWave(wave)) {
         if (wave < MAX_WAVES) {
-            showNotification(`WAVE ${wave} COMPLETE`, "#fff");
+            showNotification("WAVE COMPLETE", "#fff");
             wave++;
             setTimeout(startWave, 2000);
         } else {
@@ -1114,9 +1377,9 @@ function update() {
     if (gameState !== 'playing') return;
     
     handleRegeneration();
-    updateGrenadeHUD();
+    updateAuxiliaryCooldowns();
 
-    if (isFiringContinuous && !player.reloading && player.currentWeapon === 'gun') {
+    if (isFiringContinuous && !player.reloading && player.currentWeapon === 'gun' && !player.isHealing) {
         const now = Date.now();
         if (now - lastAutoShotTime >= AUTO_FIRE_RATE) {
             shoot();
@@ -1320,6 +1583,14 @@ function draw() {
             let spriteSize = (canvas.height / (dist * Math.cos(spriteAngle))) * (s.scale || 1);
             let xPos = (0.5 * (spriteAngle / (fov / 2)) + 0.5) * canvas.width;
             
+            if (s.type === 'enemy') {
+                const idx = enemies.findIndex(e => e.x === s.x && e.y === s.y);
+                if (idx !== -1) {
+                    enemies[idx].renderX = xPos;
+                    enemies[idx].renderSize = spriteSize;
+                }
+            }
+
             if (dist < zBuffer[Math.floor(xPos)] + 0.5) {
                 if (s.type === 'enemy') {
                     let hSlices = canvas.height / (dist * Math.cos(spriteAngle));
@@ -1428,6 +1699,11 @@ function draw() {
                     ctx.beginPath(); ctx.arc(xPos, horizon, spriteSize/10, 0, Math.PI * 2); ctx.fill();
                 }
             }
+        } else {
+            if (s.type === 'enemy') {
+                const idx = enemies.findIndex(e => e.x === s.x && e.y === s.y);
+                if (idx !== -1) enemies[idx].renderSize = 0;
+            }
         }
     });
 
@@ -1447,7 +1723,7 @@ document.addEventListener('mousedown', (e) => {
     } else if (gameState === 'playing') {
         if (document.pointerLockElement === canvas) {
             if (player.currentWeapon === 'gun') {
-                isFiringContinuous = true; 
+                player.isHealing ? isFiringContinuous = false : isFiringContinuous = true; 
             } else {
                 shoot(); 
             }
@@ -1468,7 +1744,7 @@ document.addEventListener('mousemove', (e) => {
         player.dir += e.movementX * 0.0025;
         player.pitch = Math.max(-200, Math.min(200, player.pitch - e.movementY * 0.8));
         
-        if (!player.reloading && !player.isMeleeSwinging) {
+        if (!player.reloading && !player.isMeleeSwinging && !player.isHealing) {
             weaponWrap.style.transform = `translateX(-50%) translateY(${player.pitch * -0.15}px)`;
         }
     }
@@ -1480,6 +1756,7 @@ window.addEventListener('keydown', e => {
         if (e.code === 'KeyR') reload(); 
         if (e.code === 'KeyE') throwGrenade(); 
         if (e.code === 'Digit1') switchWeapon();
+        if (e.code === 'Digit2') useMedkit();
     }
 });
 window.addEventListener('keyup', e => keys[e.code] = false);
