@@ -1,0 +1,2018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>APEX HORIZON | Ultimate 3D Racing Simulator</title>
+    <!-- Three.js r128 from cdnjs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Google Fonts for Motorsport Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,400;0,600;0,700;1,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ff3b30;
+            --primary-glow: rgba(255, 59, 48, 0.5);
+            --accent: #00e5ff;
+            --accent-glow: rgba(0, 229, 255, 0.45);
+            --gold: #ffcc00;
+            --success: #30d158;
+            --bg-dark: #090b10;
+            --panel-bg: rgba(13, 17, 26, 0.86);
+            --panel-border: rgba(255, 255, 255, 0.14);
+            --text-main: #f5f7fa;
+            --text-muted: #94a3b8;
+            --hud-scale: 1;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+        }
+
+        .font-racing {
+            font-family: 'Chakra Petch', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* WebGL Canvas Container */
+        #game-canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Windshield Rain & Speed Lines Overlay */
+        #screen-fx-overlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 5;
+            overflow: hidden;
+        }
+
+        #speed-lines-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        #lightning-flash {
+            position: absolute;
+            inset: 0;
+            background: rgba(220, 240, 255, 0.85);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #cockpit-rain-overlay {
+            position: absolute;
+            inset: 0;
+            background-image: radial-gradient(circle at 20% 30%, rgba(255,255,255,0.18) 1px, transparent 2px),
+                              radial-gradient(circle at 70% 60%, rgba(255,255,255,0.22) 1.5px, transparent 3px),
+                              radial-gradient(circle at 45% 80%, rgba(255,255,255,0.15) 1px, transparent 2px);
+            background-size: 120px 120px, 180px 180px, 90px 90px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        /* Glassmorphism Panels & Buttons */
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            transition: all 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.16);
+            border-color: rgba(255, 255, 255, 0.35);
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #ff3b30 0%, #d70015 100%);
+            border-color: #ff6961;
+            box-shadow: 0 6px 20px var(--primary-glow);
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #ff5147 0%, #e60017 100%);
+            box-shadow: 0 8px 26px rgba(255, 59, 48, 0.7);
+        }
+
+        .btn-accent {
+            background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+            border-color: #66e0ff;
+            box-shadow: 0 6px 20px var(--accent-glow);
+        }
+
+        .btn-gold {
+            background: linear-gradient(135deg, #ffd60a 0%, #ff9f0a 100%);
+            color: #090b10;
+            border-color: #ffe666;
+            font-weight: 800;
+        }
+
+        /* ==================== MAIN MENU & LOBBY UI ==================== */
+        #main-menu-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px 28px;
+            background: linear-gradient(90deg, rgba(7, 9, 14, 0.92) 0%, rgba(7, 9, 14, 0.55) 48%, rgba(7, 9, 14, 0.25) 100%);
+            transition: opacity 0.35s ease, visibility 0.35s ease;
+        }
+
+        #main-menu-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .top-nav-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-badge {
+            background: linear-gradient(135deg, var(--primary), #ff9500);
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-weight: 900;
+            font-size: 1.3rem;
+            letter-spacing: 0.08em;
+            box-shadow: 0 4px 16px var(--primary-glow);
+        }
+
+        .brand-title h1 {
+            font-size: 1.65rem;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: 0.06em;
+        }
+
+        .brand-title span {
+            font-size: 0.75rem;
+            color: var(--accent);
+            font-weight: 600;
+            letter-spacing: 0.18em;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.45);
+            padding: 6px;
+            border-radius: 12px;
+            border: 1px solid var(--panel-border);
+        }
+
+        .nav-tab {
+            padding: 9px 16px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: all 0.15s ease;
+        }
+
+        .nav-tab:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .nav-tab.active {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 4px 12px var(--primary-glow);
+        }
+
+        .player-wallet {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 8px 16px;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.55);
+            border: 1px solid var(--panel-border);
+        }
+
+        .wallet-item {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .wallet-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .wallet-val {
+            font-weight: 800;
+            font-size: 1rem;
+            color: var(--gold);
+        }
+
+        /* Menu Center Content Area */
+        .menu-workspace {
+            display: grid;
+            grid-template-columns: 440px 1fr;
+            gap: 24px;
+            flex: 1;
+            margin: 18px 0;
+            min-height: 0;
+        }
+
+        @media (max-width: 1024px) {
+            .menu-workspace {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .left-drawer {
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+            max-height: 100%;
+        }
+
+        .drawer-section {
+            display: none;
+            flex-direction: column;
+            gap: 16px;
+            height: 100%;
+        }
+
+        .drawer-section.active {
+            display: flex;
+        }
+
+        /* Car Selector Cards */
+        .class-filter-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .filter-pill {
+            padding: 5px 10px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .filter-pill.active, .filter-pill:hover {
+            background: var(--accent);
+            color: #060911;
+            border-color: var(--accent);
+        }
+
+        .car-list-scroll {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+            padding-right: 6px;
+            flex: 1;
+        }
+
+        .car-list-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .car-list-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        .car-item-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .car-item-card:hover {
+            background: rgba(255, 255, 255, 0.09);
+            border-color: rgba(255, 255, 255, 0.25);
+        }
+
+        .car-item-card.selected {
+            background: linear-gradient(90deg, rgba(255, 59, 48, 0.22) 0%, rgba(255, 59, 48, 0.06) 100%);
+            border-color: var(--primary);
+            box-shadow: 0 0 18px rgba(255, 59, 48, 0.25);
+        }
+
+        .car-item-info h4 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .car-item-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        .engine-badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(0, 229, 255, 0.15);
+            color: var(--accent);
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Right Showcase Floating Specs */
+        .right-showcase-overlay {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: flex-end;
+            pointer-events: none;
+        }
+
+        .car-specs-card {
+            width: 340px;
+            padding: 18px;
+            pointer-events: auto;
+        }
+
+        .stat-bar-row {
+            margin-bottom: 10px;
+        }
+
+        .stat-bar-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.76rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: #cbd5e1;
+        }
+
+        .stat-bar-track {
+            height: 7px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+
+        .stat-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), #30d158);
+            border-radius: 99px;
+            transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        /* Track & Mode Selection Cards */
+        .track-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .track-card {
+            padding: 14px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .track-card:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .track-card.selected {
+            border-color: var(--accent);
+            background: linear-gradient(90deg, rgba(0, 229, 255, 0.18), rgba(0, 229, 255, 0.04));
+        }
+
+        .mode-pills {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .mode-card {
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.15s;
+        }
+
+        .mode-card.selected {
+            border-color: var(--gold);
+            background: rgba(255, 204, 0, 0.14);
+        }
+
+        /* Customizer Swatches & Upgrades */
+        .color-swatches {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .swatch {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            transition: transform 0.15s;
+        }
+
+        .swatch:hover, .swatch.active {
+            transform: scale(1.2);
+            border-color: #fff;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+        }
+
+        .upgrade-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Bottom Action Footer */
+        .menu-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 14px;
+            padding: 14px 20px;
+        }
+
+        .quick-weather-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        select, input[type="range"] {
+            accent-color: var(--primary);
+        }
+
+        .styled-select {
+            background: rgba(15, 20, 32, 0.9);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+        }
+
+        /* ==================== IN-GAME INTERACTIVE SCALABLE HUD ==================== */
+        #racing-hud-wrapper {
+            position: fixed;
+            inset: 0;
+            z-index: 15;
+            pointer-events: none;
+            display: none;
+        }
+
+        #racing-hud-wrapper.active {
+            display: block;
+        }
+
+        /* Scalable HUD Layer */
+        #hud-scalable-layer {
+            position: absolute;
+            inset: 0;
+            transform-origin: center center;
+            pointer-events: none;
+        }
+
+        .hud-interactive {
+            pointer-events: auto;
+        }
+
+        /* Top Bar: Position, Lap, Timer, Interactive Quick Actions */
+        .hud-top-bar {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            right: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            transform-origin: top center;
+            transform: scale(var(--hud-scale));
+        }
+
+        .hud-telemetry-box {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 18px;
+            background: rgba(10, 14, 22, 0.78);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 12px;
+        }
+
+        .hud-metric {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .hud-metric-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .hud-metric-value {
+            font-family: 'Chakra Petch', sans-serif;
+            font-size: 1.45rem;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+
+        .hud-quick-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+        }
+
+        .hud-btn {
+            padding: 8px 12px;
+            border-radius: 9px;
+            background: rgba(12, 16, 26, 0.82);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-size: 0.76rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.12s ease;
+        }
+
+        .hud-btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+            border-color: var(--accent);
+        }
+
+        .hud-btn.active-state {
+            background: rgba(0, 229, 255, 0.25);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Mini-Map */
+        .hud-minimap-box {
+            width: 160px;
+            height: 160px;
+            background: rgba(10, 14, 22, 0.82);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 14px;
+            padding: 8px;
+            position: relative;
+        }
+
+        #minimap-canvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+        }
+
+        /* Center Notifications (Countdown, Drift Score, Wrong Way, Achievements) */
+        #hud-center-alerts {
+            position: absolute;
+            top: 22%;
+            left: 50%;
+            transform: translateX(-50%) scale(var(--hud-scale));
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        #countdown-banner {
+            font-family: 'Chakra Petch', sans-serif;
+            font-size: 5rem;
+            font-weight: 800;
+            font-style: italic;
+            color: #fff;
+            text-shadow: 0 0 30px var(--primary-glow), 0 4px 12px rgba(0,0,0,0.8);
+            display: none;
+        }
+
+        #drift-score-popup {
+            padding: 8px 18px;
+            border-radius: 99px;
+            background: linear-gradient(90deg, rgba(255, 149, 0, 0.85), rgba(255, 59, 48, 0.85));
+            font-family: 'Chakra Petch', sans-serif;
+            font-weight: 800;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 20px rgba(255, 149, 0, 0.5);
+            display: none;
+        }
+
+        #wrong-way-alert {
+            padding: 8px 20px;
+            border-radius: 8px;
+            background: rgba(255, 45, 85, 0.92);
+            font-weight: 800;
+            font-size: 1.1rem;
+            letter-spacing: 0.1em;
+            animation: pulseAlert 0.6s infinite alternate;
+            display: none;
+        }
+
+        @keyframes pulseAlert {
+            from { transform: scale(0.96); opacity: 0.85; }
+            to { transform: scale(1.04); opacity: 1; }
+        }
+
+        /* Bottom Right: Analog/Digital Tachometer, Speedometer, NOS, Interactive Shifter */
+        .hud-bottom-right {
+            position: absolute;
+            bottom: 18px;
+            right: 18px;
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+            transform-origin: bottom right;
+            transform: scale(var(--hud-scale));
+        }
+
+        .tachometer-widget {
+            width: 220px;
+            height: 220px;
+            position: relative;
+            background: radial-gradient(circle at center, rgba(16, 22, 34, 0.92) 55%, rgba(8, 11, 18, 0.96) 100%);
+            border: 2px solid rgba(255, 255, 255, 0.18);
+            border-radius: 50%;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65), inset 0 0 20px rgba(0, 229, 255, 0.12);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #tacho-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .speed-readout {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        .speed-num {
+            font-family: 'Chakra Petch', sans-serif;
+            font-size: 2.8rem;
+            font-weight: 800;
+            line-height: 0.95;
+            color: #fff;
+        }
+
+        .speed-unit {
+            font-size: 0.72rem;
+            font-weight: 800;
+            color: var(--accent);
+            letter-spacing: 0.15em;
+            cursor: pointer;
+        }
+
+        .gear-badge {
+            margin-top: 6px;
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            background: var(--primary);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Chakra Petch', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 800;
+            box-shadow: 0 0 12px var(--primary-glow);
+        }
+
+        .nos-and-controls-col {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 120px;
+        }
+
+        .nos-meter-box {
+            padding: 10px;
+            border-radius: 12px;
+            background: rgba(10, 14, 22, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+        }
+
+        .nos-bar-bg {
+            height: 10px;
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 99px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .nos-bar-fill {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, #0072ff, #00e5ff);
+            box-shadow: 0 0 10px var(--accent);
+            transition: width 0.08s linear;
+        }
+
+        /* Bottom Left: Touch / Mouse Driving Controls & Car Status */
+        .hud-bottom-left {
+            position: absolute;
+            bottom: 18px;
+            left: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transform-origin: bottom left;
+            transform: scale(var(--hud-scale));
+        }
+
+        .car-status-strip {
+            display: flex;
+            gap: 10px;
+            padding: 8px 14px;
+            border-radius: 10px;
+            background: rgba(10, 14, 22, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            font-size: 0.74rem;
+            font-weight: 700;
+        }
+
+        .touch-controls-pad {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .touch-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            background: rgba(15, 20, 32, 0.82);
+            border: 2px solid rgba(255, 255, 255, 0.22);
+            color: #fff;
+            font-weight: 800;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .touch-btn:active, .touch-btn.pressed {
+            background: var(--accent);
+            color: #060911;
+            border-color: #fff;
+            transform: scale(0.94);
+        }
+
+        .touch-pedal-gas {
+            height: 68px;
+            width: 60px;
+            border-color: var(--success);
+        }
+
+        .touch-pedal-brake {
+            height: 56px;
+            width: 56px;
+            border-color: var(--primary);
+        }
+
+        /* ==================== SETTINGS & PAUSE MODAL ==================== */
+        #settings-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 40;
+            background: rgba(4, 6, 12, 0.78);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        #settings-modal-backdrop.open {
+            display: flex;
+        }
+
+        .settings-modal {
+            width: 100%;
+            max-width: 760px;
+            max-height: 88vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-body {
+            padding: 20px 24px;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 18px;
+        }
+
+        .setting-group {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .setting-group h3 {
+            font-size: 0.85rem;
+            color: var(--accent);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 0.85rem;
+        }
+
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--panel-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        /* ==================== RACE RESULTS MODAL ==================== */
+        #results-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 45;
+            background: rgba(4, 6, 12, 0.84);
+            backdrop-filter: blur(10px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        #results-modal-backdrop.open {
+            display: flex;
+        }
+
+        .results-card {
+            width: 100%;
+            max-width: 580px;
+            padding: 26px;
+            text-align: center;
+        }
+
+        .standings-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.88rem;
+            text-align: left;
+        }
+
+        .standings-table th {
+            padding: 8px 10px;
+            color: var(--text-muted);
+            border-bottom: 1px solid rgba(255,255,255,0.12);
+        }
+
+        .standings-table td {
+            padding: 9px 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .standings-table tr.player-row {
+            background: rgba(255, 59, 48, 0.18);
+            font-weight: 700;
+        }
+
+        /* Toast Notification */
+        #toast-container {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 60;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast-msg {
+            padding: 10px 20px;
+            border-radius: 99px;
+            background: rgba(15, 22, 36, 0.94);
+            border: 1px solid var(--accent);
+            color: #fff;
+            font-size: 0.85rem;
+            font-weight: 700;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            animation: fadeSlideUp 0.25s ease;
+        }
+
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D WebGL Viewport -->
+    <div id="game-canvas-container"></div>
+
+    <!-- Screen Visual Effects Layer (Speed lines, Lightning, Cockpit Rain) -->
+    <div id="screen-fx-overlay">
+        <canvas id="speed-lines-canvas"></canvas>
+        <div id="cockpit-rain-overlay"></div>
+        <div id="lightning-flash"></div>
+    </div>
+
+    <!-- ==================== MAIN MENU & GARAGE LOBBY ==================== -->
+    <div id="main-menu-overlay">
+        <!-- Top Header -->
+        <div class="top-nav-bar">
+            <div class="brand-logo">
+                <div class="brand-badge font-racing">AH</div>
+                <div class="brand-title">
+                    <h1 class="font-racing">APEX HORIZON</h1>
+                    <span>WORLD MOTORSPORT SIMULATOR</span>
+                </div>
+            </div>
+
+            <div class="nav-tabs" id="menu-nav-tabs">
+                <div class="nav-tab active" data-tab="garage">🏎️ GARAGE (32 CARS)</div>
+                <div class="nav-tab" data-tab="tracks">🗺️ TRACKS & MODES</div>
+                <div class="nav-tab" data-tab="tuning">🎨 PAINT & TUNING</div>
+            </div>
+
+            <div class="player-wallet">
+                <div class="wallet-item">
+                    <span class="wallet-label">Credits</span>
+                    <span class="wallet-val font-mono" id="ui-credits">$125,000</span>
+                </div>
+                <button class="btn" id="btn-open-settings-menu">⚙️ SETTINGS</button>
+            </div>
+        </div>
+
+        <!-- Center Workspace -->
+        <div class="menu-workspace">
+            <!-- Left Interactive Drawer -->
+            <div class="left-drawer glass-panel">
+                <!-- TAB 1: GARAGE / 32 CARS -->
+                <div class="drawer-section active" id="tab-garage">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3 class="font-racing" style="font-size:1.1rem;">Select Vehicle</h3>
+                        <button class="btn btn-accent" id="btn-rev-engine-preview" style="padding:6px 12px; font-size:0.78rem;">🔊 REV ENGINE</button>
+                    </div>
+                    <div class="class-filter-pills" id="car-class-filters">
+                        <span class="filter-pill active" data-class="ALL">ALL (32)</span>
+                        <span class="filter-pill" data-class="JDM">JDM</span>
+                        <span class="filter-pill" data-class="MUSCLE">MUSCLE</span>
+                        <span class="filter-pill" data-class="SUPERCAR">SUPERCAR</span>
+                        <span class="filter-pill" data-class="HYPERCAR">HYPERCAR</span>
+                        <span class="filter-pill" data-class="FORMULA">FORMULA</span>
+                        <span class="filter-pill" data-class="RALLY">RALLY</span>
+                        <span class="filter-pill" data-class="GT3">GT3</span>
+                        <span class="filter-pill" data-class="ELECTRIC">ELECTRIC</span>
+                    </div>
+                    <div class="car-list-scroll" id="car-selection-list"></div>
+                </div>
+
+                <!-- TAB 2: TRACKS & GAME MODES -->
+                <div class="drawer-section" id="tab-tracks">
+                    <h3 class="font-racing" style="font-size:1.05rem;">Game Mode</h3>
+                    <div class="mode-pills" id="game-mode-list">
+                        <div class="mode-card selected" data-mode="RACE">
+                            <div style="font-weight:800; font-size:0.86rem;">🏁 Grand Prix Race</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted);">3 Laps • 20-Car Rolling Start</div>
+                        </div>
+                        <div class="mode-card" data-mode="TIMETRIAL">
+                            <div style="font-weight:800; font-size:0.86rem;">⏱️ Time Trial</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted);">Beat Target Lap Record</div>
+                        </div>
+                        <div class="mode-card" data-mode="DRIFT">
+                            <div style="font-weight:800; font-size:0.86rem;">🔥 Drift Challenge</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted);">Score 15,000 Drift Pts</div>
+                        </div>
+                        <div class="mode-card" data-mode="ELIMINATION">
+                            <div style="font-weight:800; font-size:0.86rem;">💀 Elimination</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted);">Last Place Cut Every Lap</div>
+                        </div>
+                        <div class="mode-card" data-mode="FREEROAM" style="grid-column: span 2;">
+                            <div style="font-weight:800; font-size:0.86rem;">🛣️ Track Day / Free Roam</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted);">Unlimited Laps, Weather & Camera Testing</div>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+                        <span style="font-size:0.82rem; font-weight:700;">🏆 Grid Difficulty:</span>
+                        <select id="quick-difficulty-select" class="styled-select" style="padding:6px 10px; font-size:0.8rem;">
+                            <option value="MEDIUM">Medium (Start P10 / 20)</option>
+                            <option value="HARD">Hard (Start P15 / 20)</option>
+                        </select>
+                    </div>
+
+                    <h3 class="font-racing" style="font-size:1.05rem; margin-top:4px;">Select Circuit (6 Vibrant Tracks)</h3>
+                    <div class="track-grid" id="track-selection-list"></div>
+                </div>
+
+                <!-- TAB 3: PAINT & TUNING -->
+                <div class="drawer-section" id="tab-tuning">
+                    <h3 class="font-racing" style="font-size:1.05rem;">Body Paint & Livery</h3>
+                    <div class="color-swatches" id="body-color-swatches"></div>
+
+                    <h3 class="font-racing" style="font-size:0.95rem; margin-top:4px;">Racing Stripe / Accent</h3>
+                    <div class="color-swatches" id="stripe-color-swatches"></div>
+
+                    <h3 class="font-racing" style="font-size:0.95rem; margin-top:4px;">Rim Finish</h3>
+                    <div class="color-swatches" id="rim-color-swatches"></div>
+
+                    <h3 class="font-racing" style="font-size:1.05rem; margin-top:6px;">Performance Upgrades</h3>
+                    <div id="upgrades-container" style="display:flex; flex-direction:column; gap:8px;"></div>
+                </div>
+            </div>
+
+            <!-- Right Floating Car Specs Card -->
+            <div class="right-showcase-overlay">
+                <div class="car-specs-card glass-panel">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+                        <div>
+                            <span id="spec-car-class" style="font-size:0.7rem; font-weight:800; color:var(--accent); letter-spacing:0.12em;">HYPERCAR</span>
+                            <h2 id="spec-car-name" class="font-racing" style="font-size:1.35rem; line-height:1.15;">Apex Valkyrie V12</h2>
+                        </div>
+                        <span id="spec-car-drivetrain" class="engine-badge">AWD</span>
+                    </div>
+                    <p id="spec-car-engine-desc" style="font-size:0.78rem; color:var(--text-muted); margin-bottom:14px;">
+                        6.5L Naturally Aspirated V12 • 9,500 RPM Redline
+                    </p>
+
+                    <div class="stat-bar-row">
+                        <div class="stat-bar-header"><span>TOP SPEED</span><span id="stat-val-speed">238 MPH</span></div>
+                        <div class="stat-bar-track"><div class="stat-bar-fill" id="stat-bar-speed" style="width:92%"></div></div>
+                    </div>
+                    <div class="stat-bar-row">
+                        <div class="stat-bar-header"><span>ACCELERATION</span><span id="stat-val-accel">9.4 / 10</span></div>
+                        <div class="stat-bar-track"><div class="stat-bar-fill" id="stat-bar-accel" style="width:94%"></div></div>
+                    </div>
+                    <div class="stat-bar-row">
+                        <div class="stat-bar-header"><span>HANDLING & DOWNFORCE</span><span id="stat-val-handling">9.1 / 10</span></div>
+                        <div class="stat-bar-track"><div class="stat-bar-fill" id="stat-bar-handling" style="width:91%"></div></div>
+                    </div>
+                    <div class="stat-bar-row" style="margin-bottom:0;">
+                        <div class="stat-bar-header"><span>BRAKING</span><span id="stat-val-braking">9.0 / 10</span></div>
+                        <div class="stat-bar-track"><div class="stat-bar-fill" id="stat-bar-braking" style="width:90%"></div></div>
+                    </div>
+                </div>
+
+                <div style="pointer-events:auto; background:rgba(0,0,0,0.5); padding:8px 14px; border-radius:99px; font-size:0.75rem; color:#cbd5e1; border:1px solid rgba(255,255,255,0.12);">
+                    🖱️ Drag on 3D preview to rotate car • Click <b>REV ENGINE</b> to hear exhaust
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Quick Launch Bar -->
+        <div class="menu-footer glass-panel">
+            <div class="quick-weather-bar">
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <span style="font-size:0.68rem; color:var(--text-muted); font-weight:700;">CIRCUIT</span>
+                    <span id="footer-track-name" style="font-weight:800; font-size:0.92rem; color:var(--accent);">Monaco Harbor Circuit</span>
+                </div>
+                <div style="width:1px; height:28px; background:rgba(255,255,255,0.15);"></div>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:700;">
+                    🌤️ Weather:
+                    <select id="quick-weather-select" class="styled-select">
+                        <option value="CLEAR">☀️ Clear Sunny</option>
+                        <option value="SUNSET">🌅 Golden Sunset</option>
+                        <option value="OVERCAST">☁️ Overcast</option>
+                        <option value="RAIN">🌧️ Rain & Wet Track</option>
+                        <option value="STORM">⛈️ Thunderstorm</option>
+                        <option value="FOG">🌫️ Dense Fog</option>
+                        <option value="SNOW">❄️ Snow Blizzard</option>
+                    </select>
+                </label>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:700;">
+                    🎥 View:
+                    <select id="quick-camera-select" class="styled-select">
+                        <option value="THIRD">3rd-Person Chase</option>
+                        <option value="FIRST">1st-Person Cockpit</option>
+                        <option value="HOOD">Hood / Bonnet Cam</option>
+                    </select>
+                </label>
+            </div>
+
+            <button class="btn btn-primary font-racing" id="btn-start-race" style="padding:14px 34px; font-size:1.15rem; letter-spacing:0.08em;">
+                🏁 START RACE
+            </button>
+        </div>
+    </div>
+
+    <!-- ==================== IN-GAME INTERACTIVE SCALABLE HUD ==================== -->
+    <div id="racing-hud-wrapper">
+        <div id="hud-scalable-layer">
+            <!-- Top Bar -->
+            <div class="hud-top-bar">
+                <!-- Left Race Telemetry -->
+                <div class="hud-telemetry-box">
+                    <div class="hud-metric">
+                        <span class="hud-metric-label">POS</span>
+                        <span class="hud-metric-value" id="hud-position" style="color:var(--gold);">10/20</span>
+                    </div>
+                    <div style="width:1px; height:32px; background:rgba(255,255,255,0.15);"></div>
+                    <div class="hud-metric">
+                        <span class="hud-metric-label">LAP</span>
+                        <span class="hud-metric-value" id="hud-lap">1/3</span>
+                    </div>
+                    <div style="width:1px; height:32px; background:rgba(255,255,255,0.15);"></div>
+                    <div class="hud-metric">
+                        <span class="hud-metric-label">TIME</span>
+                        <span class="hud-metric-value font-mono" id="hud-lap-time" style="font-size:1.2rem;">00:00.00</span>
+                    </div>
+                    <div class="hud-metric" id="hud-drift-metric" style="display:none;">
+                        <span class="hud-metric-label">DRIFT PTS</span>
+                        <span class="hud-metric-value font-mono" id="hud-drift-total" style="color:var(--accent); font-size:1.2rem;">0</span>
+                    </div>
+                </div>
+
+                <!-- Center Interactive HUD Controls -->
+                <div class="hud-quick-buttons hud-interactive">
+                    <button class="hud-btn" id="hud-btn-camera" title="Switch Camera (C)">🎥 CAM: 3RD</button>
+                    <button class="hud-btn active-state" id="hud-btn-lights" title="Toggle Headlights (L)">💡 LIGHTS</button>
+                    <button class="hud-btn" id="hud-btn-horn" title="Car Horn (H)">📯 HORN</button>
+                    <button class="hud-btn" id="hud-btn-weather" title="Cycle Weather">🌦️ WEATHER</button>
+                    <button class="hud-btn" id="hud-btn-reset" title="Reset Car on Track (R)">🔄 RESET</button>
+                    <button class="hud-btn" id="hud-btn-mute" title="Mute/Unmute Audio (M)">🔊 AUDIO</button>
+                    <button class="hud-btn" id="hud-btn-pause" title="Settings & Pause (Esc)">⚙️ SETTINGS</button>
+                </div>
+
+                <!-- Right Live Track Mini-Map -->
+                <div class="hud-minimap-box hud-interactive" id="hud-minimap-container" title="Click to toggle Mini-map">
+                    <canvas id="minimap-canvas" width="160" height="160"></canvas>
+                </div>
+            </div>
+
+            <!-- Center Dynamic Alerts -->
+            <div id="hud-center-alerts">
+                <div id="countdown-banner">3</div>
+                <div id="wrong-way-alert">⚠️ WRONG WAY — TURN AROUND</div>
+                <div id="drift-score-popup">DRIFT +1,250 (x3)</div>
+            </div>
+
+            <!-- Bottom Left: Car Telemetry & Interactive Touch/Mouse Pedals -->
+            <div class="hud-bottom-left">
+                <div class="car-status-strip">
+                    <span id="hud-car-name" style="color:var(--accent);">Apex Valkyrie V12</span>
+                    <span>•</span>
+                    <span id="hud-weather-label">☀️ Clear</span>
+                    <span>•</span>
+                    <span id="hud-grip-label" style="color:var(--success);">GRIP 100%</span>
+                </div>
+
+                <div class="touch-controls-pad hud-interactive" id="onscreen-touch-pad">
+                    <button class="touch-btn" id="touch-left" title="Steer Left">◀</button>
+                    <button class="touch-btn" id="touch-right" title="Steer Right">▶</button>
+                    <button class="touch-btn" id="touch-handbrake" title="Handbrake (Space)" style="font-size:0.75rem;">Drift<br>BRK</button>
+                    <button class="touch-btn touch-pedal-brake" id="touch-brake" title="Brake / Reverse">BRK</button>
+                    <button class="touch-btn touch-pedal-gas" id="touch-gas" title="Accelerate">GAS</button>
+                </div>
+            </div>
+
+            <!-- Bottom Right: Tachometer, Speedometer, Gear, Interactive NOS & Shifter -->
+            <div class="hud-bottom-right">
+                <div class="nos-and-controls-col hud-interactive">
+                    <div class="nos-meter-box">
+                        <div style="display:flex; justify-content:space-between; font-size:0.7rem; font-weight:800;">
+                            <span style="color:var(--accent);">⚡ NITROUS</span>
+                            <span id="hud-nos-pct" class="font-mono">100%</span>
+                        </div>
+                        <div class="nos-bar-bg">
+                            <div class="nos-bar-fill" id="hud-nos-fill"></div>
+                        </div>
+                        <button class="btn btn-accent" id="hud-btn-nos" style="width:100%; margin-top:8px; padding:7px; font-size:0.75rem;">
+                            🔥 BOOST (SHIFT)
+                        </button>
+                    </div>
+
+                    <div style="display:flex; gap:6px;">
+                        <button class="hud-btn" id="hud-btn-gear-down" style="flex:1; justify-content:center;" title="Shift Down (Q)">G-</button>
+                        <button class="hud-btn" id="hud-btn-gear-up" style="flex:1; justify-content:center;" title="Shift Up (E)">G+</button>
+                    </div>
+                </div>
+
+                <div class="tachometer-widget hud-interactive" id="hud-tachometer-box">
+                    <canvas id="tacho-canvas" width="220" height="220"></canvas>
+                    <div class="speed-readout">
+                        <div class="speed-num" id="hud-speed-val">0</div>
+                        <div class="speed-unit" id="hud-speed-unit" title="Click to toggle MPH / KMH">MPH</div>
+                        <div class="gear-badge" id="hud-gear-val">N</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SETTINGS & PAUSE MODAL ==================== -->
+    <div id="settings-modal-backdrop">
+        <div class="settings-modal glass-panel">
+            <div class="modal-header">
+                <h2 class="font-racing" style="font-size:1.3rem;">⚙️ Simulator Settings & Controls</h2>
+                <button class="btn" id="btn-close-settings">✕ CLOSE</button>
+            </div>
+            <div class="modal-body">
+                <!-- HUD & Display -->
+                <div class="setting-group">
+                    <h3>🖥️ HUD & Camera</h3>
+                    <div class="setting-row">
+                        <span>HUD Scale Size (<b id="lbl-hud-scale">100%</b>)</span>
+                        <input type="range" id="set-hud-scale" min="0.55" max="1.45" step="0.05" value="1.0">
+                    </div>
+                    <div class="setting-row">
+                        <span>Speed Units</span>
+                        <select id="set-units" class="styled-select">
+                            <option value="MPH">MPH (Miles/h)</option>
+                            <option value="KMH">KM/H (Kilometers/h)</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span>Camera Perspective</span>
+                        <select id="set-camera" class="styled-select">
+                            <option value="THIRD">3rd-Person Chase</option>
+                            <option value="FIRST">1st-Person Cockpit</option>
+                            <option value="HOOD">Hood / Bonnet View</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span>On-Screen Touch Pedals</span>
+                        <input type="checkbox" id="set-touch-pad" checked style="width:18px; height:18px;">
+                    </div>
+                </div>
+
+                <!-- Environment & Weather -->
+                <div class="setting-group">
+                    <h3>🌦️ Dynamic Weather & World</h3>
+                    <div class="setting-row">
+                        <span>Live Weather</span>
+                        <select id="set-weather" class="styled-select">
+                            <option value="CLEAR">☀️ Clear Sunny</option>
+                            <option value="SUNSET">🌅 Golden Sunset</option>
+                            <option value="OVERCAST">☁️ Overcast</option>
+                            <option value="RAIN">🌧️ Rain & Wet Track</option>
+                            <option value="STORM">⛈️ Thunderstorm</option>
+                            <option value="FOG">🌫️ Dense Fog</option>
+                            <option value="SNOW">❄️ Snow Blizzard</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span>Graphics & Shadows</span>
+                        <select id="set-graphics" class="styled-select">
+                            <option value="HIGH">Ultra (Shadows + Max Crowd)</option>
+                            <option value="MEDIUM">Medium (Balanced)</option>
+                            <option value="LOW">Performance (Fast FPS)</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span>Race Difficulty & Grid Slot</span>
+                        <select id="set-difficulty" class="styled-select">
+                            <option value="MEDIUM">Medium (Start P10 / 20)</option>
+                            <option value="HARD">Hard (Start P15 / 20)</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span>Grid Size (Racers)</span>
+                        <select id="set-ai-count" class="styled-select">
+                            <option value="19" selected>20 Racers (Full F1 Grid)</option>
+                            <option value="9">10 Racers</option>
+                            <option value="1">1v1 Duel</option>
+                            <option value="0">Solo Track</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Audio Engine & SFX -->
+                <div class="setting-group">
+                    <h3>🔊 Loud Exhaust & Audio</h3>
+                    <div class="setting-row">
+                        <span>Master Volume (<b id="lbl-vol-master">90%</b>)</span>
+                        <input type="range" id="set-vol-master" min="0" max="1" step="0.05" value="0.9">
+                    </div>
+                    <div class="setting-row">
+                        <span>Engine & Exhaust (<b id="lbl-vol-engine">100%</b>)</span>
+                        <input type="range" id="set-vol-engine" min="0" max="1.3" step="0.05" value="1.0">
+                    </div>
+                    <div class="setting-row">
+                        <span>Tires, Turbo & FX (<b id="lbl-vol-sfx">85%</b>)</span>
+                        <input type="range" id="set-vol-sfx" min="0" max="1" step="0.05" value="0.85">
+                    </div>
+                </div>
+
+                <!-- Driving Physics & Assists -->
+                <div class="setting-group">
+                    <h3>🏎️ Driving Physics & Controls</h3>
+                    <div class="setting-row">
+                        <span>Transmission</span>
+                        <select id="set-transmission" class="styled-select">
+                            <option value="AUTO">Automatic</option>
+                            <option value="MANUAL">Manual (Q / E)</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span>Steering Sensitivity (<b id="lbl-steer-sens">1.0x</b>)</span>
+                        <input type="range" id="set-steer-sens" min="0.5" max="1.6" step="0.1" value="1.0">
+                    </div>
+                    <div class="setting-row">
+                        <span>Traction Control (TCS)</span>
+                        <input type="checkbox" id="set-tcs" checked style="width:18px; height:18px;">
+                    </div>
+                    <div style="font-size:0.74rem; color:var(--text-muted); line-height:1.45; margin-top:4px;">
+                        <b>Controls:</b> WASD / Arrows = Drive • Space = Handbrake • Shift = Nitrous • C = Camera • L = Lights • H = Horn • R = Reset
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="btn-quit-to-menu" style="display:none;">🏠 QUIT TO GARAGE</button>
+                <button class="btn" id="btn-restart-race" style="display:none;">🔄 RESTART RACE</button>
+                <button class="btn btn-accent" id="btn-resume-apply" style="margin-left:auto;">✓ APPLY & RESUME</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== RACE RESULTS MODAL ==================== -->
+    <div id="results-modal-backdrop">
+        <div class="results-card glass-panel">
+            <span id="res-subtitle" style="font-size:0.78rem; font-weight:800; color:var(--accent); letter-spacing:0.15em;">RACE COMPLETE</span>
+            <h2 id="res-title" class="font-racing" style="font-size:2.1rem; margin:4px 0 12px;">1ST PLACE VICTORY!</h2>
+            <div style="display:flex; justify-content:center; gap:20px; margin-bottom:14px;">
+                <div class="glass-panel" style="padding:10px 18px;">
+                    <div style="font-size:0.7rem; color:var(--text-muted);">BEST LAP</div>
+                    <div id="res-best-lap" class="font-mono" style="font-weight:800; font-size:1.1rem;">01:12.44</div>
+                </div>
+                <div class="glass-panel" style="padding:10px 18px;">
+                    <div style="font-size:0.7rem; color:var(--text-muted);">PRIZE EARNED</div>
+                    <div id="res-prize" class="font-mono" style="font-weight:800; font-size:1.1rem; color:var(--gold);">+$25,000</div>
+                </div>
+            </div>
+            <table class="standings-table">
+                <thead>
+                    <tr>
+                        <th>POS</th>
+                        <th>DRIVER</th>
+                        <th>CAR</th>
+                        <th>GAP / STATUS</th>
+                    </tr>
+                </thead>
+                <tbody id="res-standings-body"></tbody>
+            </table>
+            <div style="display:flex; gap:12px; justify-content:center; margin-top:18px;">
+                <button class="btn" id="btn-res-garage">🏠 RETURN TO GARAGE</button>
+                <button class="btn btn-primary" id="btn-res-race-again">🏁 RACE AGAIN</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Feed -->
+    <div id="toast-container"></div>
+
+    <!-- ==================== CORE 3D ENGINE, AUDIO SYNTH & GAME LOGIC ==================== -->
+    <script>
+    (function() {
+        'use strict';
+
+        /* ============================================================================
+           1. COMPREHENSIVE 32-CAR ROSTER WITH UNIQUE ENGINE AUDIO SIGNATURES & 3D SPECS
+           ============================================================================ */
+        const CAR_DATABASE = [
+            // --- JDM LEGENDS (8) ---
+            { id: 'skyline_r34', name: 'Nissan Skyline GT-R R34', class: 'JDM', drivetrain: 'AWD', topSpeed: 196, accel: 8.6, handling: 8.8, braking: 8.5, mass: 1540, gears: 6, transType: 'MANUAL', shape: 'r34', cockpitType: 'jdm', color: '#0055ff', stripe: '#ffffff', engineType: 'I6_TWIN_TURBO', cyl: 6, firingPattern: [1,1,1,1,1,1], baseFreq: 42, maxRpm: 8800, turbo: 0.9, supercharger: 0, crackle: 0.85, desc: '2.6L RB26DETT Twin-Turbo I6 • Fluttering BOV & Deep Growl' },
+            { id: 'supra_mk4', name: 'Toyota Supra RZ MK4', class: 'JDM', drivetrain: 'RWD', topSpeed: 204, accel: 8.8, handling: 8.2, braking: 8.3, mass: 1510, gears: 6, transType: 'MANUAL', shape: 'supra', cockpitType: 'jdm', color: '#ff5500', stripe: '#111111', engineType: '2JZ_BIG_TURBO', cyl: 6, firingPattern: [1,1,1,1,1,1], baseFreq: 40, maxRpm: 8600, turbo: 1.0, supercharger: 0, crackle: 0.95, desc: '3.0L 2JZ-GTE Single Big Turbo • Massive Boost & Anti-Lag Pops' },
+            { id: 'rx7_fd', name: 'Mazda RX-7 Spirit R', class: 'JDM', drivetrain: 'RWD', topSpeed: 190, accel: 8.3, handling: 9.2, braking: 8.6, mass: 1270, gears: 6, transType: 'MANUAL', shape: 'rx7', cockpitType: 'jdm', color: '#ffd60a', stripe: '#111111', engineType: 'ROTARY_WANKEL', cyl: 3, firingPattern: [0.78, 1.24, 0.98], baseFreq: 66, maxRpm: 10000, turbo: 0.65, supercharger: 0, crackle: 1.0, desc: '13B Twin-Rotor Wankel • High-Pitch Brap-Brap & Flame Spitting' },
+            { id: 'nsx_na2', name: 'Honda NSX-R GT', class: 'JDM', drivetrain: 'RWD', topSpeed: 194, accel: 8.5, handling: 9.4, braking: 8.9, mass: 1270, gears: 6, transType: 'MANUAL', shape: 'nsx', cockpitType: 'jdm', color: '#ffffff', stripe: '#ff2d55', engineType: 'V6_VTEC', cyl: 6, firingPattern: [1,1,1,1,1,1], baseFreq: 52, maxRpm: 9000, turbo: 0, supercharger: 0, crackle: 0.55, desc: '3.2L C32B DOHC VTEC V6 • Razor-Sharp Induction Scream' },
+            { id: 'wrx_sti', name: 'Subaru Impreza WRX STI 22B', class: 'JDM', drivetrain: 'AWD', topSpeed: 178, accel: 8.7, handling: 9.1, braking: 8.5, mass: 1270, gears: 6, transType: 'MANUAL', shape: 'wrx', cockpitType: 'jdm', color: '#1d4ed8', stripe: '#facc15', engineType: 'BOXER4_RUMBLE', cyl: 4, firingPattern: [0.76, 1.24, 0.76, 1.24], baseFreq: 34, maxRpm: 8000, turbo: 0.9, supercharger: 0, crackle: 0.95, desc: '2.2L Turbo Boxer-4 • Unequal-Length Header Rumble & Flutter' },
+            { id: 'evo_ix', name: 'Mitsubishi Lancer Evo IX MR', class: 'JDM', drivetrain: 'AWD', topSpeed: 182, accel: 8.7, handling: 9.0, braking: 8.6, mass: 1410, gears: 6, transType: 'MANUAL', shape: 'evo', cockpitType: 'jdm', color: '#e11d48', stripe: '#ffffff', engineType: 'I4_TURBO_RALLY', cyl: 4, firingPattern: [1,1,1,1], baseFreq: 38, maxRpm: 8200, turbo: 0.95, supercharger: 0, crackle: 0.95, desc: '2.0L 4G63 Turbocharged I4 • Aggressive Rally Anti-Lag' },
+            { id: 'ae86_trueno', name: 'Toyota Sprinter Trueno AE86', class: 'JDM', drivetrain: 'RWD', topSpeed: 162, accel: 7.6, handling: 9.1, braking: 8.1, mass: 940, gears: 5, transType: 'MANUAL', shape: 'ae86', cockpitType: 'jdm', color: '#ffffff', stripe: '#111111', engineType: 'I4_4AGE_ITB', cyl: 4, firingPattern: [1,1,1,1], baseFreq: 48, maxRpm: 9200, turbo: 0, supercharger: 0, crackle: 0.65, desc: '1.6L 4A-GE 20V Individual Throttle Bodies • Crisp Induction Bark' },
+            { id: 's2000_cr', name: 'Honda S2000 CR', class: 'JDM', drivetrain: 'RWD', topSpeed: 174, accel: 8.0, handling: 9.3, braking: 8.5, mass: 1250, gears: 6, transType: 'MANUAL', shape: 's2000', cockpitType: 'jdm', color: '#0284c7', stripe: '#111111', engineType: 'I4_F20C_9K', cyl: 4, firingPattern: [1,1,1,1], baseFreq: 50, maxRpm: 9100, turbo: 0, supercharger: 0, crackle: 0.5, desc: '2.0L F20C VTEC I4 • 9,000 RPM Naturally Aspirated Screamer' },
+
+            // --- AMERICAN MUSCLE (6) ---
+            { id: 'mustang_gt500', name: 'Shelby Mustang GT500', class: 'MUSCLE', drivetrain: 'RWD', topSpeed: 202, accel: 8.9, handling: 7.9, braking: 8.2, mass: 1750, gears: 7, transType: 'DCT', shape: 'mustang', cockpitType: 'muscle', color: '#0284c7', stripe: '#ffffff', engineType: 'V8_SUPERCHARGED', cyl: 8, firingPattern: [0.85, 1.15, 0.85, 0.85, 1.15, 1.15, 0.85, 1.15], baseFreq: 33, maxRpm: 7500, turbo: 0, supercharger: 0.95, crackle: 0.85, desc: '5.2L Predator Supercharged V8 • Screaming Blower Whine' },
+            { id: 'charger_hellcat', name: 'Dodge Charger SRT Hellcat', class: 'MUSCLE', drivetrain: 'RWD', topSpeed: 205, accel: 9.3, handling: 7.5, braking: 8.0, mass: 1980, gears: 8, transType: 'DCT', shape: 'charger', cockpitType: 'muscle', color: '#7c3aed', stripe: '#111111', engineType: 'V8_HEMI_BLOWER', cyl: 8, firingPattern: [0.82, 1.18, 0.82, 0.82, 1.18, 1.18, 0.82, 1.18], baseFreq: 30, maxRpm: 6800, turbo: 0, supercharger: 1.0, crackle: 0.9, desc: '6.2L HEMI Supercharged V8 • Thunderous Bass & Blower Scream' },
+            { id: 'camaro_zl1', name: 'Camaro ZL1 1LE Track', class: 'MUSCLE', drivetrain: 'RWD', topSpeed: 198, accel: 8.8, handling: 8.7, braking: 8.8, mass: 1730, gears: 6, transType: 'MANUAL', shape: 'camaro', cockpitType: 'muscle', color: '#16a34a', stripe: '#09090b', engineType: 'V8_CROSSPLANE', cyl: 8, firingPattern: [0.84, 1.16, 0.84, 0.84, 1.16, 1.16, 0.84, 1.16], baseFreq: 32, maxRpm: 7000, turbo: 0, supercharger: 0.8, crackle: 0.8, desc: '6.2L LT4 Supercharged Cross-Plane V8 • Raw American Thunder' },
+            { id: 'corvette_z06', name: 'Chevrolet Corvette C8 Z06', class: 'MUSCLE', drivetrain: 'RWD', topSpeed: 206, accel: 9.1, handling: 9.1, braking: 9.0, mass: 1560, gears: 8, transType: 'DCT', shape: 'c8z06', cockpitType: 'gt3', color: '#facc15', stripe: '#111111', engineType: 'V8_FLATPLANE', cyl: 8, firingPattern: [1,1,1,1,1,1,1,1], baseFreq: 54, maxRpm: 8600, turbo: 0, supercharger: 0, crackle: 0.75, desc: '5.5L LT6 Flat-Plane Crank V8 • Exotic High-Revving Wail' },
+            { id: 'viper_acr', name: 'Dodge Viper ACR Extreme', class: 'MUSCLE', drivetrain: 'RWD', topSpeed: 196, accel: 9.0, handling: 9.5, braking: 9.4, mass: 1530, gears: 6, transType: 'MANUAL', shape: 'viper', cockpitType: 'muscle', color: '#dc2626', stripe: '#111111', engineType: 'V10_VIPER_84L', cyl: 10, firingPattern: [0.9, 1.1, 0.9, 1.1, 0.9, 1.1, 0.9, 1.1, 0.9, 1.1], baseFreq: 35, maxRpm: 6600, turbo: 0, supercharger: 0, crackle: 0.95, desc: '8.4L Side-Pipe Naturally Aspirated V10 • Brutal Big-Block Snarl' },
+            { id: 'ford_gt', name: 'Ford GT Carbon Series', class: 'MUSCLE', drivetrain: 'RWD', topSpeed: 216, accel: 9.2, handling: 9.4, braking: 9.3, mass: 1385, gears: 7, transType: 'DCT', shape: 'fordgt', cockpitType: 'gt3', color: '#1d4ed8', stripe: '#ffffff', engineType: 'V6_ECOBOOST_GT', cyl: 6, firingPattern: [1,1,1,1,1,1], baseFreq: 48, maxRpm: 7600, turbo: 0.85, supercharger: 0, crackle: 0.8, desc: '3.5L Twin-Turbo EcoBoost V6 • Le Mans GTE Exhaust Roar' },
+
+            // --- EUROPEAN SUPERCARS & HYPERCARS (8) ---
+            { id: 'ferrari_488', name: 'Ferrari 488 Pista', class: 'SUPERCAR', drivetrain: 'RWD', topSpeed: 215, accel: 9.3, handling: 9.4, braking: 9.3, mass: 1385, gears: 7, transType: 'DCT', shape: 'ferrari', cockpitType: 'gt3', color: '#dc2626', stripe: '#ffffff', engineType: 'V8_ITALIAN_TT', cyl: 8, firingPattern: [1,1,1,1,1,1,1,1], baseFreq: 56, maxRpm: 8500, turbo: 0.6, supercharger: 0, crackle: 0.75, desc: '3.9L Flat-Plane Twin-Turbo V8 • Sharp Maranello Exhaust Bark' },
+            { id: 'lambo_svj', name: 'Lamborghini Aventador SVJ', class: 'SUPERCAR', drivetrain: 'AWD', topSpeed: 221, accel: 9.4, handling: 9.3, braking: 9.3, mass: 1525, gears: 7, transType: 'SEQUENTIAL', shape: 'lambo', cockpitType: 'gt3', color: '#22c55e', stripe: '#111111', engineType: 'V12_LAMBO_NA', cyl: 12, firingPattern: [1,1,1,1,1,1,1,1,1,1,1,1], baseFreq: 64, maxRpm: 8800, turbo: 0, supercharger: 0, crackle: 0.9, desc: '6.5L Naturally Aspirated V12 • Savage ISR Sequential Slam' },
+            { id: 'porsche_gt3rs', name: 'Porsche 911 GT3 RS (992)', class: 'SUPERCAR', drivetrain: 'RWD', topSpeed: 202, accel: 9.0, handling: 9.8, braking: 9.6, mass: 1450, gears: 7, transType: 'DCT', shape: 'porsche911', cockpitType: 'gt3', color: '#e2e8f0', stripe: '#dc2626', engineType: 'FLAT6_NA', cyl: 6, firingPattern: [1,1,1,1,1,1], baseFreq: 55, maxRpm: 9200, turbo: 0, supercharger: 0, crackle: 0.6, desc: '4.0L Naturally Aspirated Flat-6 • 9,000 RPM Motorsport Rasp' },
+            { id: 'mclaren_p1', name: 'McLaren P1 GTR', class: 'SUPERCAR', drivetrain: 'RWD', topSpeed: 226, accel: 9.6, handling: 9.6, braking: 9.6, mass: 1395, gears: 7, transType: 'DCT', shape: 'mclaren', cockpitType: 'gt3', color: '#f97316', stripe: '#18181b', engineType: 'V8_BRITISH_TT', cyl: 8, firingPattern: [1,1,1,1,1,1,1,1], baseFreq: 52, maxRpm: 8600, turbo: 0.85, supercharger: 0.2, crackle: 0.95, desc: '3.8L Twin-Turbo V8 + IPAS Hybrid • Inconel Flame Spitters' },
+            { id: 'bugatti_chiron', name: 'Bugatti Chiron Super Sport', class: 'HYPERCAR', drivetrain: 'AWD', topSpeed: 268, accel: 9.8, handling: 8.7, braking: 9.2, mass: 1975, gears: 7, transType: 'DCT', shape: 'chiron', cockpitType: 'gt3', color: '#1d4ed8', stripe: '#09090b', engineType: 'W16_QUAD_TURBO', cyl: 16, firingPattern: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], baseFreq: 38, maxRpm: 7200, turbo: 1.0, supercharger: 0, crackle: 0.65, desc: '8.0L Quad-Turbo W16 • Jet-Turbine Whoosh & Deep Roar' },
+            { id: 'koenigsegg_jesko', name: 'Koenigsegg Jesko Absolut', class: 'HYPERCAR', drivetrain: 'RWD', topSpeed: 275, accel: 9.7, handling: 9.4, braking: 9.5, mass: 1390, gears: 9, transType: 'DCT', shape: 'jesko', cockpitType: 'gt3', color: '#f8fafc', stripe: '#f59e0b', engineType: 'V8_LIGHTSPEED', cyl: 8, firingPattern: [1,1,1,1,1,1,1,1], baseFreq: 52, maxRpm: 8500, turbo: 0.9, supercharger: 0, crackle: 0.85, desc: '5.0L Flat-Plane Twin-Turbo V8 • Zero-Inertia 9-Speed Shifts' },
+            { id: 'pagani_huayra', name: 'Pagani Huayra R', class: 'HYPERCAR', drivetrain: 'RWD', topSpeed: 236, accel: 9.5, handling: 9.7, braking: 9.7, mass: 1050, gears: 6, transType: 'SEQUENTIAL', shape: 'pagani', cockpitType: 'gt3', color: '#18181b', stripe: '#eab308', engineType: 'V12_AMG_SCREAM', cyl: 12, firingPattern: [1,1,1,1,1,1,1,1,1,1,1,1], baseFreq: 70, maxRpm: 9500, turbo: 0, supercharger: 0, crackle: 0.8, desc: '6.0L HWA V12-R • F1-Derived Inconel Acoustic Symphony' },
+            { id: 'aston_valkyrie', name: 'Aston Martin Valkyrie', class: 'HYPERCAR', drivetrain: 'RWD', topSpeed: 245, accel: 9.6, handling: 9.9, braking: 9.8, mass: 1030, gears: 7, transType: 'SEQUENTIAL', shape: 'valkyrie', cockpitType: 'f1', color: '#065f46', stripe: '#a3e635', engineType: 'V12_COSWORTH_11K', cyl: 12, firingPattern: [1,1,1,1,1,1,1,1,1,1,1,1], baseFreq: 78, maxRpm: 11100, turbo: 0, supercharger: 0, crackle: 0.65, desc: '6.5L Cosworth V12 • Ear-Splitting 11,100 RPM Screamer' },
+
+            // --- FORMULA, PROTOTYPE, GT3 & RALLY (10) ---
+            { id: 'f1_2026', name: 'APEX GP-26 Formula 1', class: 'FORMULA', drivetrain: 'RWD', topSpeed: 235, accel: 9.9, handling: 10.0, braking: 10.0, mass: 798, gears: 8, transType: 'SEQUENTIAL', shape: 'f1', cockpitType: 'f1', color: '#ef4444', stripe: '#ffffff', engineType: 'F1_V6_HYBRID', cyl: 6, firingPattern: [1,1,1,1,1,1], baseFreq: 80, maxRpm: 13500, turbo: 0.7, supercharger: 0.35, crackle: 0.5, desc: '1.6L V6 Turbo Hybrid MGU-H • 13,500 RPM Downforce Monster' },
+            { id: 'f1_v10_classic', name: '2004 V10 Formula Legend', class: 'FORMULA', drivetrain: 'RWD', topSpeed: 232, accel: 9.8, handling: 9.9, braking: 9.9, mass: 605, gears: 7, transType: 'SEQUENTIAL', shape: 'f1', cockpitType: 'f1', color: '#dc2626', stripe: '#f8fafc', engineType: 'F1_V10_19K', cyl: 10, firingPattern: [1,1,1,1,1,1,1,1,1,1], baseFreq: 96, maxRpm: 18500, turbo: 0, supercharger: 0, crackle: 0.45, desc: '3.0L Naturally Aspirated V10 • 18,500 RPM Banshee Wail' },
+            { id: 'formula_e', name: 'APEX Gen3 Formula E', class: 'FORMULA', drivetrain: 'AWD', topSpeed: 200, accel: 9.5, handling: 9.6, braking: 9.5, mass: 840, gears: 1, transType: 'DCT', shape: 'formula_e', cockpitType: 'f1', color: '#0ea5e9', stripe: '#facc15', engineType: 'GEN3_EV_FORMULA', cyl: 0, firingPattern: [1], baseFreq: 210, maxRpm: 20000, turbo: 0, supercharger: 0, crackle: 0, desc: '350kW Dual-Powertrain Open-Wheeler • High-Frequency Inverter' },
+            { id: 'porsche_963', name: 'Porsche 963 Le Mans Hypercar', class: 'GT3', drivetrain: 'AWD', topSpeed: 222, accel: 9.6, handling: 9.8, braking: 9.8, mass: 1030, gears: 7, transType: 'SEQUENTIAL', shape: 'lmdh', cockpitType: 'f1', color: '#ffffff', stripe: '#dc2626', engineType: 'LMDH_V8_TT', cyl: 8, firingPattern: [1,1,1,1,1,1,1,1], baseFreq: 56, maxRpm: 8800, turbo: 0.8, supercharger: 0.3, crackle: 0.8, desc: '4.6L Twin-Turbo V8 Hybrid • Endurance Prototype Straight-Cut Whine' },
+            { id: 'amg_gt3', name: 'Mercedes-AMG GT3 Evo', class: 'GT3', drivetrain: 'RWD', topSpeed: 198, accel: 9.0, handling: 9.6, braking: 9.6, mass: 1285, gears: 6, transType: 'SEQUENTIAL', shape: 'amg_gt3', cockpitType: 'gt3', color: '#94a3b8', stripe: '#10b981', engineType: 'V8_AMG_GT3', cyl: 8, firingPattern: [0.85, 1.15, 0.85, 0.85, 1.15, 1.15, 0.85, 1.15], baseFreq: 36, maxRpm: 7600, turbo: 0, supercharger: 0, crackle: 0.9, desc: '6.2L M159 Naturally Aspirated V8 • Brutal Pneumatic Sequential' },
+            { id: 'bmw_m4_gt3', name: 'BMW M4 GT3', class: 'GT3', drivetrain: 'RWD', topSpeed: 196, accel: 8.9, handling: 9.5, braking: 9.5, mass: 1290, gears: 6, transType: 'SEQUENTIAL', shape: 'bmw_gt3', cockpitType: 'gt3', color: '#ffffff', stripe: '#2563eb', engineType: 'I6_P58_GT3', cyl: 6, firingPattern: [1,1,1,1,1,1], baseFreq: 48, maxRpm: 7800, turbo: 0.75, supercharger: 0, crackle: 0.85, desc: '3.0L P58 M TwinPower Turbo I6 • Straight-Cut Gearbox Whine' },
+            { id: 'audi_quattro_s1', name: 'Audi Sport Quattro S1 E2', class: 'RALLY', drivetrain: 'AWD', topSpeed: 184, accel: 9.2, handling: 8.8, braking: 8.4, mass: 1090, gears: 6, transType: 'SEQUENTIAL', shape: 'quattro_s1', cockpitType: 'jdm', color: '#f8fafc', stripe: '#eab308', engineType: 'I5_GROUP_B', cyl: 5, firingPattern: [0.88, 1.12, 0.92, 1.08, 1.0], baseFreq: 45, maxRpm: 8500, turbo: 1.0, supercharger: 0, crackle: 1.0, desc: '2.1L 5-Cylinder Group B Turbo • Iconic 5-Pot Warble & Chirp' },
+            { id: 'lancia_delta', name: 'Lancia Delta HF Integrale', class: 'RALLY', drivetrain: 'AWD', topSpeed: 175, accel: 8.5, handling: 9.2, braking: 8.5, mass: 1250, gears: 6, transType: 'MANUAL', shape: 'delta', cockpitType: 'jdm', color: '#dc2626', stripe: '#ffffff', engineType: 'I4_ITALIAN_RALLY', cyl: 4, firingPattern: [1,1,1,1], baseFreq: 40, maxRpm: 7800, turbo: 0.85, supercharger: 0, crackle: 0.85, desc: '2.0L 16V Turbo • Six-Time World Rally Champion' },
+            { id: 'rimac_nevera', name: 'Rimac Nevera R', class: 'ELECTRIC', drivetrain: 'AWD', topSpeed: 256, accel: 10.0, handling: 9.0, braking: 9.3, mass: 2150, gears: 1, transType: 'DCT', shape: 'nevera', cockpitType: 'gt3', color: '#06b6d4', stripe: '#09090b', engineType: 'QUAD_ELECTRIC', cyl: 0, firingPattern: [1], baseFreq: 180, maxRpm: 18000, turbo: 0, supercharger: 0, crackle: 0, desc: '1,914 HP Quad-Motor EV • Futuristic Sci-Fi Inverter Scream' },
+            { id: 'porsche_taycan_gt', name: 'Porsche Taycan Turbo GT', class: 'ELECTRIC', drivetrain: 'AWD', topSpeed: 205, accel: 9.6, handling: 8.9, braking: 9.1, mass: 2220, gears: 2, transType: 'DCT', shape: 'taycan', cockpitType: 'gt3', color: '#a855f7', stripe: '#09090b', engineType: 'DUAL_ELECTRIC_2SPD', cyl: 0, firingPattern: [1], baseFreq: 150, maxRpm: 16000, turbo: 0, supercharger: 0, crackle: 0, desc: '1,092 HP Dual-Motor 2-Speed EV • Harmonic Electric Synth' }
+        ];
+
+        /* ============================================================================
+           2. VIBRANT & REALISTIC RACING CIRCUITS (6 TRACKS)
+           ============================================================================ */
+        const TRACK_DATABASE = [
+            {
+                id: 'monaco',
+                name: 'Monaco Harbor Grand Circuit',
+                location: 'Monte Carlo • 3x Mega Harbor Street Circuit',
+                theme: 'HARBOR',
+                roadWidth: 24,
+                skyTop: 0x1e6091,
+                skyBottom: 0x90e0ef,
+                groundColor: 0x3a404a,
+                waterColor: 0x0077b6,
+                curbA: 0xdc2626,
+                curbB: 0xffffff,
+                targetLap: 145,
+                points: [
+                    [0, 0], [0, -4200], [540, -5160], [1560, -5340], [2760, -4650],
+                    [3060, -1050], [2640, 360], [3120, 1950], [2460, 3450], [1020, 3660],
+                    [-360, 3240], [-1080, 2160], [-840, 840]
+                ]
+            },
+            {
+                id: 'tokyo',
+                name: 'Tokyo Neon Mega Expressway',
+                location: 'Shuto Wangan • 7.2km Ultra-High-Speed Straight',
+                theme: 'NEON_CITY',
+                roadWidth: 30,
+                skyTop: 0x070b19,
+                skyBottom: 0x1e1b4b,
+                groundColor: 0x111827,
+                waterColor: 0x090d16,
+                curbA: 0x00e5ff,
+                curbB: 0xff007f,
+                targetLap: 165,
+                points: [
+                    [0, 0], [0, -5550], [780, -6600], [2640, -6600], [3660, -5250],
+                    [3660, 750], [2880, 2340], [3300, 3960], [1920, 4950], [240, 4560],
+                    [-1020, 3150], [-1140, 1260]
+                ]
+            },
+            {
+                id: 'alpine',
+                name: 'Alpine Mountain Grand Pass',
+                location: 'Swiss Alps • 3x Endurance Valley & Long Straights',
+                theme: 'ALPINE',
+                roadWidth: 25,
+                skyTop: 0x2563eb,
+                skyBottom: 0xbae6fd,
+                groundColor: 0x2d6a4f,
+                waterColor: 0x38bdf8,
+                curbA: 0xfacc15,
+                curbB: 0x18181b,
+                targetLap: 175,
+                points: [
+                    [0, 0], [0, -4500], [-720, -5850], [360, -7050], [2040, -6750],
+                    [2760, -4650], [3750, -3300], [3960, -1050], [2880, 360], [3360, 2250],
+                    [2040, 3750], [420, 3150], [-840, 3360], [-1080, 1440]
+                ]
+            },
+            {
+                id: 'sahara',
+                name: 'Sahara Desert Mega Canyon',
+                location: 'Red Rock Gorge • 8.4km Top-Speed Salt Flat Straight',
+                theme: 'DESERT',
+                roadWidth: 30,
+                skyTop: 0xd97706,
+                skyBottom: 0xfde68a,
+                groundColor: 0xd97706,
+                waterColor: 0xb45309,
+                curbA: 0xef4444,
+                curbB: 0xfef08a,
+                targetLap: 160,
+                points: [
+                    [0, 0], [0, -6300], [1020, -7650], [3150, -7350], [4350, -4950],
+                    [3960, 450], [4260, 2760], [2760, 4440], [780, 4020], [-960, 4140],
+                    [-1680, 2160], [-1020, 660]
+                ]
+            },
+            {
+                id: 'silverstone',
+                name: 'Silverstone Endurance GP',
+                location: 'Northamptonshire • 3x Extended Hangar & Wellington Straights',
+                theme: 'GP_CIRCUIT',
+                roadWidth: 26,
+                skyTop: 0x3b82f6,
+                skyBottom: 0xdbeafe,
+                groundColor: 0x15803d,
+                waterColor: 0x0284c7,
+                curbA: 0xdc2626,
+                curbB: 0xffffff,
+                targetLap: 170,
+                points: [
+                    [0, 0], [0, -4950], [840, -6150], [2940, -6150], [3660, -4050],
+                    [2760, -2040], [3750, 240], [3420, 2640], [1680, 3840], [180, 3060],
+                    [-1080, 3420], [-1440, 1620], [-780, 630]
+                ]
+            },
+            {
+                id: 'redwood',
+                name: 'Redwood Forest Endurance',
+                location: 'Pacific Northwest • 3x Timberland Mega Straightaways',
+                theme: 'FOREST',
+                roadWidth: 25,
+                skyTop: 0x065f46,
+                skyBottom: 0xa7f3d0,
+                groundColor: 0x14532d,
+                waterColor: 0x0369a1,
+                curbA: 0xf97316,
+                curbB: 0xffffff,
+                targetLap: 172,
+                points: [
+                    [0, 0], [0, -4650], [780, -5940], [2640, -5760], [3240, -3240],
+                    [2340, -1020], [3360, 1080], [2880, 3240], [1260, 3960], [-240, 2880],
+                    [-1260, 3240], [-1560, 1560], [-720, 540]
+                ]
+            }
+        ];
+
+        /* ============================================================================
+           3. STUDIO-QUALITY HARMONIC COMBUSTION ENGINE & GEAR SHIFT AUDIO SYNTH
+           ============================================================================ */
+        class EngineAudioSystem {
+            constructor() {
+                this.ctx = null;
+                this.masterGain = null;
+                this.engineGain = null;
+                this.sfxGain = null;
+                this.isInitialized = false;
+                this.isMuted = false;
+
+                // Warm Multi-Harmonic PeriodicWave Oscillator Bank
+                this.fundamentalOsc = null;
+                this.firingOsc = null;
+                this.harmonic2Osc = null;
+                this.subBassOsc = null;
+
+                // Acoustic Exhaust & Intake Filtering
+                this.warmthLowpass = null;
+                this.exhaustBodyFilter = null;
+                this.presenceFilter = null;
+                this.softClipper = null;
+                this.engineBus = null;
+
+                // Filtered Airbox / Induction Roar
+                this.intakeNoise = null;
+                this.intakeFilter = null;
+                this.intakeGain = null;
+
+                // Straight-Cut Race Gearbox Whine
+                this.gearWhineOsc = null;
+                this.gearWhineGain = null;
+
+                // Turbo & Supercharger
+                this.oscTurbo = null;
+                this.oscSupercharger = null;
+                this.turboGain = null;
+                this.scGain = null;
+
+                // Tire Screech
+                this.tireNoiseNode = null;
+                this.tireFilter = null;
+                this.tireGain = null;
+
+                this.sharedNoiseBuffer = null;
+                this.currentCar = CAR_DATABASE[0];
+                this.lastCrackTime = 0;
+                this.lastShiftSoundTime = 0;
+            }
+
+            init() {
+                if (this.isInitialized) {
+                    if (this.ctx.state === 'suspended') this.ctx.resume();
+                    return;
+                }
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioCtx();
+
+                // Generate 4-second smooth pink noise buffer
+                const bufferSize = this.ctx.sampleRate * 4;
+                this.sharedNoiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = this.sharedNoiseBuffer.getChannelData(0);
+                let b0 = 0, b1 = 0, b2 = 0;
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    b0 = 0.99765 * b0 + white * 0.0990460;
+                    b1 = 0.96300 * b1 + white * 0.2965164;
+                    b2 = 0.57000 * b2 + white * 1.0526913;
+                    data[i] = (b0 + b1 + b2 + white * 0.1848) * 0.18;
+                }
+
+                // Mastering Limiter / Compressor so audio is rich, warm, and never clips
+                const compressor = this.ctx.createDynamicsCompressor();
+                compressor.threshold.value = -16;
+                compressor.knee.value = 18;
+                compressor.ratio.value = 5.0;
+                compressor.attack.value = 0.006;
+                compressor.release.value = 0.16;
+
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.gain.value = gameSettings.volMaster;
+
+                this.engineGain = this.ctx.createGain();
+                this.engineGain.gain.value = gameSettings.volEngine * 0.65;
+
+                this.sfxGain = this.ctx.createGain();
+                this.sfxGain.gain.value = gameSettings.volSfx * 0.5;
+
+                this.engineGain.connect(compressor);
+                this.sfxGain.connect(compressor);
+                compressor.connect(this.masterGain);
+                this.masterGain.connect(this.ctx.destination);
+
+                this._buildRichEngineSynth();
+                this._buildTireSynth();
+                this.isInitialized = true;
+            }
+
+            _createCombustionWave(profile = 'EXOTIC') {
+                const harmonics = 16;
+                const real = new Float32Array(harmonics);
+                const imag = new Float32Array(harmonics);
+
+                if (profile === 'V8_DEEP') {
+                    const weights = [0, 1.0, 0.72, 0.45, 0.55, 0.24, 0.18, 0.12, 0.08, 0.05, 0.03, 0.02, 0.01, 0, 0, 0];
+                    for (let i = 1; i < harmonics; i++) imag[i] = weights[i] || 0;
+                } else if (profile === 'EXOTIC_HIGH') {
+                    const weights = [0, 0.85, 1.0, 0.68, 0.42, 0.32, 0.22, 0.14, 0.09, 0.06, 0.04, 0.02, 0.01, 0, 0, 0];
+                    for (let i = 1; i < harmonics; i++) imag[i] = weights[i] || 0;
+                } else if (profile === 'EV') {
+                    const weights = [0, 1.0, 0.18, 0.08, 0.03, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+                    for (let i = 1; i < harmonics; i++) imag[i] = weights[i] || 0;
+                } else {
+                    const weights = [0, 1.0, 0.82, 0.54, 0.34, 0.20, 0.13, 0.08, 0.05, 0.03, 0.015, 0.01, 0, 0, 0, 0];
+                    for (let i = 1; i < harmonics; i++) imag[i] = weights[i] || 0;
+                }
+                return this.ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+            }
+
+            _makeWarmTubeCurve(amount = 1.6) {
+                const n = 8192;
+                const curve = new Float32Array(n);
+                for (let i = 0; i < n; i++) {
+                    const x = (i * 2) / n - 1;
+                    curve[i] = Math.tanh(x * amount) / Math.tanh(amount);
+                }
+                return curve;
+            }
+
+            _buildRichEngineSynth() {
+                this.engineBus = this.ctx.createGain();
+                this.engineBus.gain.value = 0.0;
+
+                this.softClipper = this.ctx.createWaveShaper();
+                this.softClipper.curve = this._makeWarmTubeCurve(1.65);
+                this.softClipper.oversample = '2x';
+
+                this.exhaustBodyFilter = this.ctx.createBiquadFilter();
+                this.exhaustBodyFilter.type = 'peaking';
+                this.exhaustBodyFilter.frequency.value = 165;
+                this.exhaustBodyFilter.Q.value = 1.5;
+                this.exhaustBodyFilter.gain.value = 7.5;
+
+                this.presenceFilter = this.ctx.createBiquadFilter();
+                this.presenceFilter.type = 'peaking';
+                this.presenceFilter.frequency.value = 580;
+                this.presenceFilter.Q.value = 1.2;
+                this.presenceFilter.gain.value = 4.0;
+
+                this.warmthLowpass = this.ctx.createBiquadFilter();
+                this.warmthLowpass.type = 'lowpass';
+                this.warmthLowpass.frequency.value = 950;
+                this.warmthLowpass.Q.value = 0.9;
+
+                const defaultWave = this._createCombustionWave('BALANCED');
+                this.fundamentalOsc = this.ctx.createOscillator();
+                this.fundamentalOsc.setPeriodicWave(defaultWave);
+                const gFund = this.ctx.createGain();
+                gFund.gain.value = 0.52;
+
+                this.firingOsc = this.ctx.createOscillator();
+                this.firingOsc.setPeriodicWave(defaultWave);
+                const gFire = this.ctx.createGain();
+                gFire.gain.value = 0.42;
+
+                this.harmonic2Osc = this.ctx.createOscillator();
+                this.harmonic2Osc.type = 'triangle';
+                const gHarm2 = this.ctx.createGain();
+                gHarm2.gain.value = 0.28;
+
+                this.subBassOsc = this.ctx.createOscillator();
+                this.subBassOsc.type = 'sine';
+                const gSub = this.ctx.createGain();
+                gSub.gain.value = 0.72;
+
+                this.intakeNoise = this.ctx.createBufferSource();
+                this.intakeNoise.buffer = this.sharedNoiseBuffer;
+                this.intakeNoise.loop = true;
+
+                this.intakeFilter = this.ctx.createBiquadFilter();
+                this.intakeFilter.type = 'bandpass';
+                this.intakeFilter.frequency.value = 480;
+                this.intakeFilter.Q.value = 0.95;
+
+                this.intakeGain = this.ctx.createGain();
+                this.intakeGain.gain.value = 0.05;
+
+                this.intakeNoise.connect(this.intakeFilter);
+                this.intakeFilter.connect(this.intakeGain);
+                this.intakeGain.connect(this.exhaustBodyFilter);
+
+                this.gearWhineOsc = this.ctx.createOscillator();
+                this.gearWhineOsc.type = 'sine';
+                this.gearWhineGain = this.ctx.createGain();
+                this.gearWhineGain.gain.value = 0;
+                this.gearWhineOsc.connect(this.gearWhineGain);
+                this.gearWhineGain.connect(this.engineBus);
+
+                this.oscTurbo = this.ctx.createOscillator();
+                this.oscTurbo.type = 'sine';
+                this.turboGain = this.ctx.createGain();
+                this.turboGain.gain.value = 0;
+
+                this.oscSupercharger = this.ctx.createOscillator();
+                this.oscSupercharger.type = 'sine';
+                this.scGain = this.ctx.createGain();
+                this.scGain.gain.value = 0;
+
+                this.fundamentalOsc.connect(gFund); gFund.connect(this.softClipper);
+                this.firingOsc.connect(gFire); gFire.connect(this.softClipper);
+                this.harmonic2Osc.connect(gHarm2); gHarm2.connect(this.softClipper);
+                this.subBassOsc.connect(gSub); gSub.connect(this.exhaustBodyFilter);
+
+                this.softClipper.connect(this.exhaustBodyFilter);
+                this.exhaustBodyFilter.connect(this.presenceFilter);
+                this.presenceFilter.connect(this.warmthLowpass);
+                this.warmthLowpass.connect(this.engineBus);
+
+                this.oscTurbo.connect(this.turboGain);
+                this.turboGain.connect(this.engineBus);
+                this.oscSupercharger.connect(this.scGain);
+                this.scGain.connect(this.engineBus);
+
+                this.engineBus.connect(this.engineGain);
+
+                this.fundamentalOsc.start();
+                this.firingOsc.start();
+                this.harmonic2Osc.start();
+                this.subBassOsc.start();
+                this.intakeNoise.start();
+                this.gearWhineOsc.start();
+                this.oscTurbo.start();
+                this.oscSupercharger.start();
+            }
+
+            _buildTireSynth() {
+                this.tireNoiseNode = this.ctx.createBufferSource();
+                this.tireNoiseNode.buffer = this.sharedNoiseBuffer;
+                this.tireNoiseNode.loop = true;
+
+                this.tireFilter = this.ctx.createBiquadFilter();
+                this.tireFilter.type = 'bandpass';
+                this.tireFilter.frequency.value = 1150;
+                this.tireFilter.Q.value = 5.5;
+
+                this.tireGain = this.ctx.createGain();
+                this.tireGain.gain.value = 0;
+
+                this.tireNoiseNode.connect(this.tireFilter);
+                this.tireFilter.connect(this.tireGain);
+                this.tireGain.connect(this.sfxGain);
+                this.tireNoiseNode.start();
+            }
+
+            configureForCar(car) {
+                this.currentCar = car;
+                if (!this.isInitialized) return;
+
+                let profile = 'BALANCED';
+                if (car.cyl === 0) {
+                    profile = 'EV';
+                    this.exhaustBodyFilter.frequency.value = 420;
+                } else if (car.cyl === 8 && (car.engineType.includes('CROSSPLANE') || car.engineType.includes('HEMI') || car.engineType.includes('SUPERCHARGED') || car.engineType.includes('AMG'))) {
+                    profile = 'V8_DEEP';
+                    this.exhaustBodyFilter.frequency.value = 125;
+                } else if (car.cyl >= 10 || car.engineType.includes('FLATPLANE') || car.engineType.includes('ITALIAN') || car.engineType.includes('F1')) {
+                    profile = 'EXOTIC_HIGH';
+                    this.exhaustBodyFilter.frequency.value = 240;
+                } else {
+                    profile = 'BALANCED';
+                    this.exhaustBodyFilter.frequency.value = 175;
+                }
+
+                const wave = this._createCombustionWave(profile);
+                this.fundamentalOsc.setPeriodicWave(wave);
+                this.firingOsc.setPeriodicWave(wave);
+            }
+
+            update(rpmRatio, throttle, slipRatio, isNosActive, isActiveScene, vehicleSpeedMs = 0) {
+                if (!this.isInitialized || this.isMuted) return;
+                const now = this.ctx.currentTime;
+
+                if (!isActiveScene) {
+                    this.engineBus.gain.setTargetAtTime(0.0, now, 0.08);
+                    this.tireGain.gain.setTargetAtTime(0.0, now, 0.08);
+                    return;
+                }
+
+                const car = this.currentCar;
+                const clampedRpm = Math.max(0.11, Math.min(1.05, rpmRatio));
+
+                const hitLimiter = clampedRpm > 0.985 && throttle > 0.5 && car.cyl > 0;
+                const limiterDip = hitLimiter ? (Math.floor(now * 22) % 2 === 0) : false;
+
+                const idleHz = car.baseFreq;
+                const maxHz = car.cyl === 0
+                    ? car.baseFreq * 3.8
+                    : Math.min(440, (car.maxRpm / 60) * (car.cyl / 2) * 0.36);
+                const fundamental = idleHz + Math.pow(clampedRpm, 1.05) * (maxHz - idleHz);
+
+                let pulseRatio = 0.502;
+                if (car.engineType.includes('BOXER') || car.engineType.includes('CROSSPLANE') || car.engineType.includes('HEMI')) {
+                    pulseRatio = 0.506;
+                } else if (car.engineType.includes('ROTARY')) {
+                    pulseRatio = 0.667;
+                } else if (car.cyl === 5) {
+                    pulseRatio = 0.602;
+                } else if (car.cyl >= 10) {
+                    pulseRatio = 1.5;
+                }
+
+                this.fundamentalOsc.frequency.setTargetAtTime(fundamental, now, 0.02);
+                this.firingOsc.frequency.setTargetAtTime(fundamental * pulseRatio, now, 0.02);
+                this.harmonic2Osc.frequency.setTargetAtTime(fundamental * 2.0, now, 0.02);
+                this.subBassOsc.frequency.setTargetAtTime(fundamental * 0.5, now, 0.02);
+
+                const cutoffHz = (car.cyl === 0 ? 1800 : 320) + clampedRpm * 920 + throttle * 680 + (isNosActive ? 450 : 0);
+                this.warmthLowpass.frequency.setTargetAtTime(cutoffHz, now, 0.03);
+                this.presenceFilter.frequency.setTargetAtTime(340 + clampedRpm * 620, now, 0.03);
+
+                this.intakeFilter.frequency.setTargetAtTime(280 + clampedRpm * 950 + throttle * 350, now, 0.03);
+                const airVol = car.cyl === 0 ? 0.015 : (0.04 + clampedRpm * 0.16 + throttle * 0.14);
+                this.intakeGain.gain.setTargetAtTime(airVol, now, 0.03);
+
+                if (car.transType === 'SEQUENTIAL' || car.class === 'GT3' || car.class === 'FORMULA') {
+                    this.gearWhineOsc.frequency.setTargetAtTime(420 + vehicleSpeedMs * 24, now, 0.025);
+                    this.gearWhineGain.gain.setTargetAtTime(Math.min(0.065, vehicleSpeedMs * 0.0008), now, 0.04);
+                } else {
+                    this.gearWhineGain.gain.setTargetAtTime(0, now, 0.05);
+                }
+
+                const targetGain = limiterDip ? 0.34 : (0.48 + throttle * 0.32 + clampedRpm * 0.18 + (isNosActive ? 0.12 : 0));
+                this.engineBus.gain.setTargetAtTime(targetGain, now, 0.025);
+
+                if (car.turbo > 0) {
